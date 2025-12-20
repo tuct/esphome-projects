@@ -46,10 +46,10 @@ Filter can be resetted via HomeAssistant integration
 ### BOM
 
 * Xiao Seeed Studio ESP32S3
-* LCD - i2c
-* Level Shifter - 3.3 / 5v
-* DC-DC Stepdown Converter
-* Button
+* [LCD - 0.91 Inch OLED Display I2C SSD1306](https://www.amazon.de/-/en/dp/B07BY6QN7Q)
+* [Level Shifter](https://www.amazon.de/-/en/4-Channel-Converter-BiDirectional-Raspberry-Microcontroller/dp/B07RY15XMJ) - 3.3 / 5v Bidirectional
+* [DC-DC Stepdown Converter]( https://www.amazon.de/-/en/dp/B08K37TS6F?ref_=ppx_hzod_title_dt_b_fed_asin_title_0_0&th=1), MP1584EN 22mm x 17mm x 4mm
+* [Button](https://www.amazon.de/RUNCCI-YUN-Momentary-Tactile-12x12x7-3mm-Switches/dp/B0BF51N8CK), 12 mm x 12 mm x 7.3 mm
 * Sockets and Connectors
   * JST-XH 2.5, 2pin and 4pin
   * JST-PH 2.0, 2pin and 4pin 
