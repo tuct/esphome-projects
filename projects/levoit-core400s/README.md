@@ -1,14 +1,30 @@
 
 # Levoit Core400s - Custom Firmware (esphome)
 
-Based On Core300s - link
+Based On Core300s - but needed some changes to the component as small parts of the communcations changed compared to the core300s
 
 * Works with Core400s, Board Version 1.2 - MCU Firmware: 3.0.0
 * Improved state handling, only send state if changed, lewss noisy logs,...
 
+## Features
+
+* Fan component with modes (Manual, Auto, Sleep)
+* Display current and avg CFM value
+* Filter life time 
+  * Tracking based on current CFM value
+  * Configurable via Home Assistant (1-12 Months)
+  * Reset via Home Assistant
+* Display run time in Home Assistant
+
 ## Disassembly
 
 Very similar to Core 300s but i had to unplug the pcb from the carry holes to get to it after i removed the filter and filter hosing.
+* Place upside down and remove base cover and filter to expose 8 screws (4 have washers)
+* Remove all 8 screws be careful, as these are made out of a soft metal
+* Using a pry tool slide in between tabs
+* Separate base and top sleeve
+* Unplug logic board - done with screwdriver/kitchen knife from the side
+* Remove Fan unit to get to the logic board
 
 J1 - dubug header pinout
 1 - TX
@@ -20,9 +36,50 @@ J1 - dubug header pinout
 
 I was not able to dump the original FW, it seems i am stupid or it is somehow prevented (watchdog?), maybe try when pcb is powererd up?
 
+## Flash
+
+* Solder wires to pins TXD0, RXD0, IO0, +3V3, and GND near the ESP32 on the logic board, and connect these to a USB-UART converter. On some boards, if these are through holes, soldering may not be necessary.
+* Connect IO0 to ground during power before connecting USB-UART to boot to bootloader. On some boards, IO0 may not have it's own debug pin and the ESP32 GPIO0 pin on the esp can be used.
+
+### Backup Existing Firmware
+```
+esptool read_flash 0 ALL levoit.bin
+```
+
+This did not work for me, always ended in an error, so i yoloed it and continued without a backup of the original FW
+
+### Update name and set secrets
+
+Rename `secrets-example.yaml` to `secrets.yaml` and set your wifi and encryption key, ...
+
+Adopt device name if needed in `core400s.yaml` (multiple units!)
+
+### Compile and Install New Firmware
+
+```
+esphome run core400s.yaml
+```
+  
+& reassemble, enjoy :)
+
+#### In case you want to flash back original FW
+
+```
+esptool erase_flash
+esptool write_flash 0x00 levoit.bin
+```
+
+
+
+
+
 ## HW Details
 
 Different FW! 3.0.0
+
+Main changes 
+* Message identifier for status changed from 01 30 40 to 01 B0 40
+* Position of fan speed and display on changed compared to 300s other message ids!
 
 01 B0 40 - Status (MCU to ESP)
 
