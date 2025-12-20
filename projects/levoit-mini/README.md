@@ -1,0 +1,78 @@
+# Smartified Levoit Mini
+
+Custom PCB, 3D Prionted Parts and Firmware (esphome based) to smartify the Levoit Mini Ait Purifier
+
+
+
+## Features
+* Custom Firmware and PCB for the Levoit Mini - Non destructive and fully reversable.
+* Home Assistant integration as Fan
+  * 3 Speeds (33%, 66%, 100%)
+  * Presets: Manual, Sleep(Speed 25%), Auto(Manual, 50%, requires PM based AQI sensor) 
+* Filter Lifetime, based on current CFM and runtime
+* Filter Lifetime can be configured between 1-12 Months, based on the air pollution you have.
+* Fan Speed, Current and avg. CFM 
+
+![Controls and Sensors](./photos/ha_one.png)
+![Config and Diagnostics ](./photos/ha_two.png)
+
+## Usage instructions
+
+Click Button One time, for at least 1/4s to turn on and cycle speeds.
+
+Double click Button quickly, to turn on and cycle preset modes (Manual, Auto, Sleep).
+
+Long Press Button, 2.5s+ to turn off the device.
+
+Filter can be resetted via HomeAssistant integration
+
+## Build instructions
+
+### Disassembly 
+
+* Remove the Air Filter
+* Remove the 4 Screws
+* User a long Screwdriver or similar item to carfully lift the top, by pushing inwards and down, after the first one or two are open, continue from the outside
+* Unplug the original PCB
+
+### BOM
+
+* Xiao Seeed Studio ESP32S3
+* LCD - i2c
+* Level Shifter - 3.3 / 5v
+* DC-DC Stepdown Converter
+* Button
+* Sockets and Connectors
+  * JST-XH 2.5, 2pin and 4pin
+  * JST-PH 2.0, 2pin and 4pin 
+* Wires
+* Custom PCB
+* 3D Printed parts
+
+### Custom PCB
+
+![Custom PCB](./photos/pcb.png)
+
+#### PCB Assembly 
+I used poor man's smd soldering, but using pin header will also work - 
+Add some solder to the bad with holes and then place the part on top and add solder to the top hole until it melts down, start with two opposite corners. Ensure connection is fine with Multimeter.
+
+
+
+### 3D Printed Parts
+
+### Button and LCD assembly
+* Wire the LCD and the Button as shown here, use JST-XH connectors
+* Insert the Button and slide the button holder in. Use hot or super glue to fix.
+* use hot glue to glue the LCD in, i recommend doing this with the lcd on, so that you can find the correct position.
+
+
+
+
+### Assembly
+
+* Insert the replacment top part (bigger one) and connect the new PCB
+* Check the strange use of the original connectors and connect the same way!
+* Connect LCD and Button
+* Insert the Button and LCD assemply, check orientation, Button should face the Levoit Logo. Slightly twist the part to find the correct position (snap).
+

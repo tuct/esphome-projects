@@ -1,0 +1,405 @@
+substitutions:
+  name: mista-levoit-mini
+  friendlyName: Levoit Mini
+  maxCfm: "34.0"
+esphome:
+  name: ${name}
+  friendly_name: ${friendlyName}
+  project:
+    name: "tuct.mista-levoit-mini"
+    version: "1.0.0"
+  platformio_options:
+    build_flags: -DBOARD_HAS_PSRAM
+    board_build.arduino.memory_type: qio_opi
+    board_build.f_flash: 80000000L
+    board_build.flash_mode: qio
+  on_boot:
+    - priority: -100
+      then:
+        - script.execute: display_off_script
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+# Enable logging
+logger:
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+ota:
+  - platform: esphome
+    password: !secret ota_password
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  output_power: 15dB
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Mista-Levoit-Mini"
+    password: !secret wifi_ap_password
+captive_portal:
+i2c:
+  sda: GPIO07 #D8
+  scl: GPIO08 #D9
+output:
+  - platform: ledc
+    pin: GPIO06 #D5
+    id: gpio_06
+    frequency: 1600Hz
+    max_power: 0.97
+    min_power: 0.1
+    zero_means_zero: true
+fan:
+  - platform: speed
+    output: gpio_06
+    speed_count: 3
+    id: levoit_fan
+    name: "Levoit Mini Fan"
+    preset_modes:
+      - Manual
+      - Auto
+      - Sleep 
+    on_preset_set:     
+      - lambda: |-
+          //
+          auto selected_preset = x;
+          if( selected_preset!=""){
+            if (!id(levoit_fan).state) { //turn on if off
+              auto call = id(levoit_fan).turn_on(); 
+              call.set_preset_mode(selected_preset.c_str());
+              call.perform();
+            } 
+            if(selected_preset=="Auto") {
+              //move!! read aqi and adopt!
+              id(gpio_06).set_level(0.5);
+            } 
+            if(selected_preset=="Sleep" ) {
+              // reduce speed 
+              id(gpio_06).set_level(0.265);
+            }
+          }  
+    on_speed_set:
+      - lambda: |- 
+            auto preset = id(levoit_fan).preset_mode;
+            if (preset !="Manual") {
+              auto call = id(levoit_fan).turn_on(); 
+              call.set_preset_mode("Manual");
+              call.perform();
+            } 
+binary_sensor:
+  - platform: template
+    id: replace_filter
+    name: Replace filter
+    device_class: smoke
+    icon: mdi:air-filter
+    condition:
+      sensor.in_range:
+        id: filter_life_left
+        below: 3.0
+  - platform: gpio
+    pin: 
+      number: GPIO44 #D7
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    id: btn_main
+    on_press:
+      then:
+        - globals.set:
+            id: display_off
+            value: 'false'
+    on_double_click:
+      min_length: 10ms
+      max_length: 250ms
+      then:
+        - lambda: |-
+            auto call = id(levoit_fan).turn_on(); 
+            auto presetMode = id(levoit_fan).preset_mode;
+            if(presetMode == "Manual") call.set_preset_mode("Auto");
+            if(presetMode == "Auto") call.set_preset_mode("Sleep");
+            if(presetMode == "Sleep" || presetMode =="") call.set_preset_mode("Manual");
+            call.perform();
+    on_click:
+    - min_length: 250ms
+      max_length: 2000ms
+      then:
+
+        - fan.cycle_speed:
+            id: levoit_fan
+            off_speed_cycle: false
+        - script.execute: display_off_script
+    - min_length: 2500ms
+      max_length: 10000ms
+      then:
+        - fan.turn_off: levoit_fan
+        - script.execute: display_off_script
+text_sensor:
+  # Expose WiFi information as sensors.
+  - platform: wifi_info
+    ip_address:
+      name: IP
+  - platform: template
+    name: Runtime
+    entity_category:  diagnostic
+    lambda: |-
+      int rtMin = (int)id(run_time_min) % 60;
+      int rtHours = (int)(id(run_time_min) / 60) % 60;
+      int rtDays = (int)(id(run_time_min) / (60*24)) % (60*24);
+      char buffer[16];
+      snprintf(buffer, sizeof(buffer), "%dd %dh %dm", rtDays, rtHours, rtMin);
+      return {std::string(buffer)};
+    update_interval: 60s 
+number:
+  - platform: template
+    id: max_filter_months
+    entity_category:  config
+    icon: mdi:air-filter
+    name: "Filter life time (months)"
+    optimistic: true
+    min_value: 1
+    max_value: 12
+    initial_value: 6
+    restore_value: true
+    step: 1
+globals:
+  - id: display_off
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: cfm_min_used
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: run_time_min
+    type: int
+    restore_value: yes
+    initial_value: '0'
+switch:
+  - platform: template
+    name: "Display"
+    lambda: |-
+      return !id(display_off);
+    turn_on_action:
+      - globals.set:
+          id: display_off
+          value: 'false'
+    turn_off_action:
+      - globals.set:
+          id: display_off
+          value: 'true'
+script:
+  - id: display_off_script
+    mode: restart
+    then:
+      - delay: 45s
+      - globals.set:
+          id: display_off
+          value: 'true' 
+  - id: update_filter
+    then:
+      - lambda: |-
+          id(cfm_min_used) += id(current_cfm).state;
+          id(run_time_min) += 1;
+          
+#Update runtime every min if running 
+interval:
+  - interval: 60s #1min
+    then:
+      if:
+        condition:
+          fan.is_on: levoit_fan
+        then:
+        - script.execute: update_filter
+  - interval: 3s
+    then:
+      - if:
+          condition:
+            binary_sensor.is_on: replace_filter
+          then:
+            - display.page.show_next: mini_display
+            - component.update: mini_display        
+sensor:
+  - platform: template
+    name: "Current CFM"
+    id: current_cfm
+    lambda: |-
+        return (int)${maxCfm}*(min(100,(int)id(sensor_fan_speed).state)/100.0);
+    filters:
+      - round_to_multiple_of: 1
+      - delta: 1.0
+    update_interval: 1s
+    entity_category: DIAGNOSTIC
+    icon: mdi:air-filter
+    device_class: volume_flow_rate
+    unit_of_measurement: CFM
+    accuracy_decimals: 0
+  - platform: pulse_meter
+    name: 'Fan Speed'
+    timeout: 5s
+    id: sensor_fan_speed
+    state_class: measurement
+    device_class: speed
+    entity_category: DIAGNOSTIC
+    unit_of_measurement: '%'
+    internal_filter: 5ms 
+    accuracy_decimals: 0
+    pin: GPIO05 #D4
+    filters:
+      - multiply: 0.0166 # puls per sec
+      - median:
+          window_size: 5
+          send_every: 50
+          send_first_at: 1
+      - multiply: 1.31 # * 100/76
+      - calibrate_linear:
+          method: exact
+          datapoints:
+            - 0.0 -> 0.0
+            - 25 -> 0.0
+            - 48 -> 33
+            - 49 -> 33
+            - 50 -> 33
+            - 76 -> 66
+            - 77 -> 66
+            - 78 -> 66
+            - 97 -> 100
+            - 100 -> 100
+            - 120 -> 100
+      - round_to_multiple_of: 1
+      - delta: 1.0
+  - platform: template
+    name: "Avg CFM/min"
+    entity_category:  diagnostic
+    icon: mdi:air-filter
+    device_class: volume_flow_rate
+    unit_of_measurement: CFM
+    accuracy_decimals: 0
+    lambda: |-
+      int rtMin = (int)id(run_time_min);
+      int cfmMin = (int)id(cfm_min_used);
+      if(rtMin==0 ||cfmMin ==0) return 0.0;
+      return cfmMin/rtMin;
+    filters:
+      - round_to_multiple_of: 1
+      - delta: 1.0  
+    update_interval: 30s
+  - platform: template
+    name: "Filter"
+    accuracy_decimals: 2
+    id: filter_life_left
+    device_class: battery
+    icon: mdi:air-filter
+    filters:
+      - round_to_multiple_of: 0.01
+      - delta: 0.01  
+    unit_of_measurement: '%'
+    lambda: |-
+      int cfmMin = id(cfm_min_used);
+      if(cfmMin==0) return 100.0;
+      int maxMonths = (int)id(max_filter_months).state;
+      int maxCFMMin = maxMonths*30*60*24*${maxCfm}; 
+      float percent = (1 - ((float)min(cfmMin,maxCFMMin)/maxCFMMin))*100;
+      //ESP_LOGI("main", "Percent [%f] max: [%d] current: [%d]  ", percent,maxCFMMin,cfmMin);
+      return percent;
+    update_interval: 10s
+#  Optional -> PM AQI sensor for Auto Mode
+#  - platform: homeassistant
+#    id: sensor_pm_aqi
+#    entity_id: sensor.pm_aqi # 0-4
+#    attribute: current_temperature
+button:
+  - platform: template
+    name: "Filter - Reset life time"
+    entity_category: CONFIG 
+    on_press:
+      - globals.set:
+          id: cfm_min_used
+          value: '0'
+      - globals.set:
+          id: run_time_min
+          value: '0'
+image:
+  - file: mdi:air-filter
+    type: binary
+    transparency: chroma_key 
+    id: air_image
+    resize: 18x18
+  - file: mdi:air-purifier
+    type: binary
+    transparency: chroma_key 
+    id: air_purifier
+    resize: 14x14
+  - file: mdi:fan-clock
+    type: binary
+    transparency: chroma_key 
+    id: air_clock
+    resize: 14x14
+font:
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 600
+    id: roboto
+    size: 12
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: roboto_big
+    size: 24
+  
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x32"
+    id: mini_display
+    address: 0x3C
+    flip_x: false 
+    flip_y: false
+    update_interval: 500ms
+    pages:
+      - id: defaultPage
+        lambda: |-
+          if(!id(display_off)){
+            if(id(levoit_fan).state){
+              if (id(levoit_fan).preset_mode == "Auto") {
+                it.print(66, 16, id(roboto_big), TextAlign::CENTER, "AUTO"); 
+              }else if (id(levoit_fan).preset_mode == "Sleep") {
+                it.print(66, 16, id(roboto_big), TextAlign::CENTER, "SLEEP");  
+              }else{
+               switch(id(levoit_fan).speed){
+                case 3:
+                  it.print(66, 16, id(roboto_big), TextAlign::CENTER, "HIGH");
+                  break;
+                case 2:
+                  it.print(66, 16, id(roboto_big), TextAlign::CENTER, "MEDIUM");
+                  break;
+                case 1:
+                  it.print(66, 16, id(roboto_big), TextAlign::CENTER, "LOW");
+                  break;
+                }             
+              }
+
+              it.image(0, 7, id(air_image));
+
+      
+            }else{
+              it.image(0, 0, id(air_purifier));
+              it.image(0, 15, id(air_clock));
+              int rtMin = (int)id(run_time_min) % 60;
+              int rtHours = (int)id(run_time_min) / 60;
+              it.printf(64, 7, id(roboto), TextAlign::CENTER, "Filter Life: %.0f%%", id(filter_life_left).state);
+              it.printf(64, 21, id(roboto), TextAlign::CENTER, "%dh %dmin", rtHours, rtMin);
+            }
+          }   
+      - id: change_filter
+        lambda: |-   
+          it.image(0, 9, id(air_purifier));  
+          it.print(66, 16, id(roboto), TextAlign::CENTER, "REPLACE FILTER!");
+
+      - id: change_filter2
+        lambda: |-   
+          it.print(66, 7, id(roboto), TextAlign::CENTER, "To clear, press");
+          it.print(66, 21, id(roboto), TextAlign::CENTER, "Button for 5sec");
+ 
