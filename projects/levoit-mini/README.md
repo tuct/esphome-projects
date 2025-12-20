@@ -1,7 +1,7 @@
 # Smartified Levoit Mini
 
 Custom PCB, 3D Prionted Parts and Firmware (esphome based) to smartify the Levoit Mini Ait Purifier
-
+![a](./photos/da_06.jpg)
 
 
 ## Features
@@ -31,9 +31,17 @@ Filter can be resetted via HomeAssistant integration
 ### Disassembly 
 
 * Remove the Air Filter
-* Remove the 4 Screws
-* User a long Screwdriver or similar item to carfully lift the top, by pushing inwards and down, after the first one or two are open, continue from the outside
-* Unplug the original PCB
+* Remove the 4 Screws 
+
+  ![a](./photos/da_01.jpg)
+* User a long Screwdriver or similar item to carfully lift the top, by pushing inwards and down, after the first one or two are open, continue from the outside 
+
+  ![a](./photos/da_02.jpg)
+* Unplug the original PCB 
+
+  ![a](./photos/da_03.jpg)
+
+
 
 ### BOM
 
@@ -72,7 +80,16 @@ Add some solder to the bad with holes and then place the part on top and add sol
 ### Assembly
 
 * Insert the replacment top part (bigger one) and connect the new PCB
+
+  ![a](./photos/da_05.jpg)
+
 * Check the strange use of the original connectors and connect the same way!
+
+  ![a](./photos/da_04.jpg)
 * Connect LCD and Button
 * Insert the Button and LCD assemply, check orientation, Button should face the Levoit Logo. Slightly twist the part to find the correct position (snap).
 
+
+
+#### Left over parts
+![a](./photos/leftovers.jpg)
