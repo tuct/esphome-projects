@@ -22,7 +22,7 @@ Mostly DIY esphome devices, but also some some components and esphome based cust
 * [automated-iris](./projects/automated-iris), (esphome, 3d parts) - Link to Printables and folder!
 
 ## WIP
-* [levoit-lv131s](./projects/levoit-lv131s), (esphome) - Custom Firmware
+* [levoit-lv-pur131s](./projects/levoit-lv131s), (esphome) - Custom Firmware
 
 
 ## TODO:
