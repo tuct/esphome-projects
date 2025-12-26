@@ -1,7 +1,11 @@
 #requires custom esphome version (500Khz for SPI) at the moment!
 esphome:
   name: levoit-lv131s
-
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          memset(id(display_bits), 0xFF, 14);
 esp32:
   board: az-delivery-devkit-v4
   framework:
@@ -11,23 +15,23 @@ esp32:
 logger:
 
 # Enable Home Assistant API
-api:
-  password: !secret ota_password
+#api:
+#  password: !secret ota_password
+#
+#ota:
+#  - platform: esphome
+#    password: !secret ota_password
+#
+#wifi:
+#  ssid: !secret wifi_ssid
+#  password: !secret wifi_password
+#
+#  # Enable fallback hotspot (captive portal) in case wifi connection fails
+#  ap:
+#    ssid: "Levoit-Lv131S Fallback Hotspot"
+#    password: "OMgo8F13ZBYn"
 
-ota:
-  - platform: esphome
-    password: !secret ota_password
-
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
-  ap:
-    ssid: "Levoit-Lv131S Fallback Hotspot"
-    password: "OMgo8F13ZBYn"
-
-captive_portal:
+#captive_portal:
 
 #control display
 spi:
@@ -70,20 +74,76 @@ uart:
           id(btn_run_check)->execute();
 #ensure we turn off binary after no input
 script:
-  id: btn_run_check
-  mode: restart
-  then:
-    - delay: 90ms
-    - binary_sensor.template.publish:
-        id: btn_power
-        state: OFF
-    - lambda: |-
-        if (id(btn_power).state) id(btn_power).publish_state(false); 
-        if (id(btn_display).state) id(btn_display).publish_state(false);
-        if (id(btn_sleep).state) id(btn_sleep).publish_state(false); 
-        if (id(btn_auto).state) id(btn_auto).publish_state(false);        
-        if (id(btn_fan).state) id(btn_fan).publish_state(false); 
-        if (id(btn_timer).state) id(btn_timer).publish_state(false);       
+  - id: btn_run_check
+    mode: restart
+    then:
+      - delay: 90ms
+      - binary_sensor.template.publish:
+          id: btn_power
+          state: OFF
+      - lambda: |-
+          if (id(btn_power).state) id(btn_power).publish_state(false); 
+          if (id(btn_display).state) id(btn_display).publish_state(false);
+          if (id(btn_sleep).state) id(btn_sleep).publish_state(false); 
+          if (id(btn_auto).state) id(btn_auto).publish_state(false);        
+          if (id(btn_fan).state) id(btn_fan).publish_state(false); 
+          if (id(btn_timer).state) id(btn_timer).publish_state(false);    
+  - id: update_display
+    mode: single
+    then:
+      - lambda: |-
+          //set mode
+          id(spidev).enable();
+          id(spidev).write_byte(0x03);
+          id(spidev).disable();
+          //set adr
+          id(spidev).enable();
+          id(spidev).write_byte(0x40);
+          id(spidev).disable();
+          //data
+          id(spidev).enable();
+          id(spidev).write_byte(0xC0);
+
+          //14 bytes data
+          for (int i = 0; i < 14; i++) {
+            id(spidev).write_byte(id(display_bits)[i]);
+          }
+
+
+          id(spidev).disable();
+          //cmd4
+          id(spidev).enable();
+          id(spidev).write_byte(0x8C);
+          id(spidev).disable(); 
+  - id: shift_display_right
+    parameters:
+      n: int
+    then:
+      - lambda: |-
+          int size = 14;
+          if (n <= 0 || n >= size) {}else{
+            // Shift right using memmove
+            memmove(&id(display_bits)[n], &id(display_bits)[0], size - n);
+
+            // Fill the leftmost n bytes with 0
+            for (int i = 0; i < n; i++) {
+              id(display_bits)[i] = 0x00;
+            }
+          
+          }
+          //id(display_bits)[0] = 0x0F; //for test 
+          // Optional: log result
+          char buffer[64];  // make sure it's big enough for 14 bytes
+          int offset = 0;
+
+          //for (int i = n; i < n+2; i++) {
+          for (int i = 0; i < size; i++) {
+              offset += sprintf(buffer + offset, "%02X ", id(display_bits)[i]);
+          }
+
+          ESP_LOGI("display", "display_bits after shift: %s", buffer);
+            
+          
 binary_sensor:
   - platform: template
     id: btn_power
@@ -97,41 +157,173 @@ binary_sensor:
     id: btn_fan
   - platform: template
     id: btn_timer
+# TEST code only used to identify the use leds by shifting a 1 through the full display memory!    
+  - platform: gpio
+    pin: 
+      number: GPIO04
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: test
+    on_click: 
+      - lambda: |-
+          //clear all
+          memset(id(display_bits), 0x00, 14);
+
+          // Set ONLY the first byte
+          id(display_bits)[0] = id(byte_loop);
+
+          ESP_LOGI("display", "display_bits[0] = 0x%02X", id(byte_loop));
+          id(shift_display_right)->execute(id(shift_offset));
+          id(update_display).execute();
+          // 01,02,04,08,10,20,40,80 for each byte to test leds!
+
+          // Increment 0x00 → 0xFF → wrap
+          if (id(byte_loop) >= 0x80){
+            id(byte_loop) = 0x01;
+            id(shift_offset)+=1;
+            if(id(shift_offset)>13){
+              id(shift_offset) = 0;
+            }
+            int start_byte = id(shift_offset);
+            ESP_LOGI("display", "Byte: %d ", start_byte);
+          }else{
+             id(byte_loop) =  id(byte_loop)*2;
+            //id(byte_loop)++;
+            //id(byte_loop) = 0x41;         
+          }
+globals:
+  - id: display_bits
+    type: uint8_t[14]
+    restore_value: no
+  - id: shift_offset
+    type: uint8_t
+    restore_value: no
+    initial_value: '11'
+  - id: byte_loop
+    type: uint8_t
+    restore_value: no
+    initial_value: '1'
 
 
-interval:
-  - interval: 1000ms
-    then:
-      - lambda: !lambda |-
-          //set mode
-          id(spidev).enable();
-          id(spidev).write_byte(0x03);
-          id(spidev).disable();
-          //set adr
-          id(spidev).enable();
-          id(spidev).write_byte(0x40);
-          id(spidev).disable();
+  
+#interval:
+#  - interval: 1000ms
+#    then:
+#      - lambda: |-
+#          //uint8_t init[14] = {0xF0, 0x00};
+#          //memcpy(id(display_bits), init, 14);
+#          
+#     
+#        
+#          // Optional: clear all first
+#          memset(id(display_bits), 0x00, 14);
+#
+#          // Set ONLY the first byte
+#          id(display_bits)[0] = id(byte_loop);
+#
+#          ESP_LOGI("display", "display_bits[0] = 0x%02X", id(byte_loop));
+#          id(shift_display_right)->execute(id(shift_offset));
+#          id(update_display).execute();
+#          // Increment 0x00 → 0xFF → wrap
+#          if (id(byte_loop) >= 0x80){
+#            id(byte_loop) = 0x01;
+#            id(shift_offset)+=1;
+#            if(id(shift_offset)>13){
+#              id(shift_offset) = 0;
+#            }
+#            int start_byte = id(shift_offset);
+#            ESP_LOGI("display", "Byte: %d ", start_byte);
+#
+#
+#          }else{
+#             id(byte_loop) =  id(byte_loop)*2;
+#            //id(byte_loop)++;
+#            //id(byte_loop) = 0x41;         
+#          }
 
-          //data
-          id(spidev).enable();
-          id(spidev).write_byte(0xC0);
-          //14 bytes data
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x80);
-          id(spidev).write_byte(0x10);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).write_byte(0x00);
-          id(spidev).disable();
-          //cmd4
-          id(spidev).enable();
-          id(spidev).write_byte(0x8C);
-          id(spidev).disable();
+
+         
+
+ 
+#      - lambda: |-
+#          uint8_t init[14] = {0x10, 0x02, 0x20, 0x00, 0x41, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+#          memcpy(id(display_bits), init, 14);
+#          //id(shift_display_right)->execute(2*id(shift_offset));
+#          id(shift_display_right)->execute(0);
+#          id(update_display).execute();
+#      - delay: 1s
+#      - lambda: |-
+#          uint8_t init[14] = {0x7D, 0x02, 0x07, 0x00, 0x7F, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+#          memcpy(id(display_bits), init, 14);
+#          //id(shift_display_right)->execute(2*id(shift_offset));
+#
+#          id(update_display).execute();
+#      - delay: 1s
+#      - lambda: |-
+#          uint8_t init[14] = {0x6F, 0x02, 0x6F, 0x00, 0x6F, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+#          memcpy(id(display_bits), init, 14);
+#          //id(shift_display_right)->execute(2*id(shift_offset));
+#
+#          id(update_display).execute();
+#      - delay: 1s
+
+#      - lambda: |-
+#          uint8_t init[14] = {0x01,0x00};
+#          memcpy(id(display_bits), init, 14);
+#          id(shift_display_right)->execute(2*id(shift_offset));
+#          id(update_display).execute();
+#      - delay: 1s      
+#      - lambda: |-
+#          uint8_t init[14] = {0x02,0x00};
+#          memcpy(id(display_bits), init, 14);
+#          id(shift_display_right)->execute(2*id(shift_offset));
+#          id(update_display).execute();
+#      - delay: 1s
+#      - lambda: |-
+#          uint8_t init[14] = {0x04,0x00};
+#          memcpy(id(display_bits), init, 14);
+#          id(shift_display_right)->execute(2*id(shift_offset));
+#          id(update_display).execute();
+#      - delay: 1s      
+#      - lambda: |-
+#          uint8_t init[14] = {0x08,0x00};
+#          memcpy(id(display_bits), init, 14);
+#          id(shift_display_right)->execute(2*id(shift_offset));
+#          id(update_display).execute();
+#      - delay: 1s
+#      - lambda: |-
+#          uint8_t init[14] = {0x00,0x01};
+#          memcpy(id(display_bits), init, 14);
+#          id(shift_display_right)->execute(2*id(shift_offset));
+#          id(update_display).execute();
+#      - delay: 1s
+#      - lambda: |-
+#          uint8_t init[14] = {0x00,0x02};
+#          memcpy(id(display_bits), init, 14);
+#          id(shift_display_right)->execute(2*id(shift_offset));
+#          id(update_display).execute();
+#      - delay: 1s      
+#      - lambda: |-   #not used?
+#          uint8_t init[14] = {0x00,0x04};
+#          memcpy(id(display_bits), init, 14);
+#          id(shift_display_right)->execute(2*id(shift_offset));
+#          id(update_display).execute();
+#      - delay: 1s
+#      - lambda: |-  #not used?
+#          uint8_t init[14] = {0x00,0x08};
+#          memcpy(id(display_bits), init, 14);
+#          id(shift_display_right)->execute(2*id(shift_offset));
+#          id(update_display).execute();
+#      - delay: 1s
+#      - lambda: |-  
+#          id(shift_offset)+=1;
+#          
+#         if(id(shift_offset)>6){
+#            id(shift_offset) = 0;
+#          }
+#          int start_byte = id(shift_offset)*2;
+#          ESP_LOGI("display", "Bytes: %d - %d ", start_byte,start_byte+1);
+
+ 
