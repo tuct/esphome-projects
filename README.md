@@ -6,23 +6,23 @@ Mostly DIY esphome devices, but also some some components and esphome based cust
 
 ## ESPHome Components
 
-* [Sensirion Sen66](./components/sen6x/README.md) - Allow using the "new" sen66 with esphome
-* [Levoit Core300s](./components/core300s/README.md) - Technical integration for custom esphome based firmware for the Levoit Core300s
-* [Levoit Core400s](./components/core400s/README.md) - Technical integration for custom esphome based firmware for the Levoit Core400s
+* [Sensirion Sen66](./components/sen6x) - Allow using the "new" sen66 with esphome
+* [Levoit Core300s](./components/core300s) - Technical integration for custom esphome based firmware for the Levoit Core300s
+* [Levoit Core400s](./components/core400s) - Technical integration for custom esphome based firmware for the Levoit Core400s
 
 ## Projects
 
-* [aqMood](./projects/aqMood/README.md), (esphome, 3d parts, custom pcb) - A Slighlty emotional AirQuality MoodLight, based on the Sen66 sensor
-* [levoit-core300s](./projects/levoit-core300s/README.md), (esphome) - Custom Firmware
-* [levoit-core400s](./projects/levoit-core400s/README.md), (esphome) - Custom Firmware
+* [aqMood](./projects/aqMood), (esphome, 3d parts, custom pcb) - A Slighlty emotional AirQuality MoodLight, based on the Sen66 sensor
+* [levoit-core300s](./projects/levoit-core300s), (esphome) - Custom Firmware
+* [levoit-core400s](./projects/levoit-core400s), (esphome) - Custom Firmware
 
-* [levoit-mini](./projects/levoit-mini/README.md), (esphome, 3d parts, custom pcb) - Smartify the Levoit Mini, Custom Hardware and Firmware
-* [smart-control-for-prusa-enclosure](./projects/smart-control-for-prusa-enclosure/README.md) (esphome, 3d parts) - 
-* [tiny-wash-and-cure](./projects/tiny-wash-and-cure/README.md), (esphome, custom pcb) - 
-* [automated-iris](./projects/automated-iris/README.md), (esphome, 3d parts) - Link to Printables and folder!
+* [levoit-mini](./projects/levoit-mini), (esphome, 3d parts, custom pcb) - Smartify the Levoit Mini, Custom Hardware and Firmware
+* [smart-control-for-prusa-enclosure](./projects/smart-control-for-prusa-enclosure) (esphome, 3d parts) - 
+* [tiny-wash-and-cure](./projects/tiny-wash-and-cure), (esphome, custom pcb) - 
+* [automated-iris](./projects/automated-iris), (esphome, 3d parts) - Link to Printables and folder!
 
 ## WIP
-* [levoit-lv131s](./projects/levoit-lv131s/README.md), (esphome) - Custom Firmware
+* [levoit-lv131s](./projects/levoit-lv131s), (esphome) - Custom Firmware
 
 
 ## TODO:
