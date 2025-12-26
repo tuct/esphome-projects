@@ -1,3 +1,4 @@
+#requires custom esphome version (500Khz for SPI) at the moment!
 esphome:
   name: levoit-lv131s
 
@@ -28,10 +29,10 @@ wifi:
 
 captive_portal:
 
-
+#control display
 spi:
     clk_pin: GPIO21
-    miso_pin: GPIO22
+    mosi_pin: GPIO22
     interface: hardware
 
 spi_device:
@@ -39,11 +40,98 @@ spi_device:
     cs_pin: GPIO23
     data_rate: 500khz
     spi_mode: 0
-    bit_order: lsb_first    
+    bit_order: lsb_first   
+
+#reading btns
+uart:
+  rx_pin: GPIO16
+  baud_rate: 990
+  data_bits: 7 
+  debug:
+    direction: BOTH
+    dummy_receiver: true
+    after:
+      bytes: 3
+    sequence:
+      - lambda:  |-
+          //UARTDebug::log_hex(direction, bytes, ':'); // show serial bytes
+          //ESP_LOGI("tobi","BTN1 - power press");
+          if(bytes.size()==3){
+            if(bytes[0]==0x1A){
+               if(bytes[1]==0x1B && bytes[2]==0x5A) id(btn_power).publish_state(true); 
+               if(bytes[1]==0x1B && bytes[2]==0x53) id(btn_display).publish_state(true);
+               if(bytes[1]==0x1B && bytes[2]==0x5B) id(btn_sleep).publish_state(true); 
+               if(bytes[1]==0x5B && bytes[2]==0x5A) id(btn_auto).publish_state(true); 
+               if(bytes[1]==0x5B && bytes[2]==0x53) id(btn_fan).publish_state(true); 
+               if(bytes[1]==0x5B && bytes[2]==0x52) id(btn_timer).publish_state(true);          
+            }
+          }
+          id(btn_run_check)->stop();
+          id(btn_run_check)->execute();
+#ensure we turn off binary after no input
+script:
+  id: btn_run_check
+  mode: restart
+  then:
+    - delay: 90ms
+    - binary_sensor.template.publish:
+        id: btn_power
+        state: OFF
+    - lambda: |-
+        if (id(btn_power).state) id(btn_power).publish_state(false); 
+        if (id(btn_display).state) id(btn_display).publish_state(false);
+        if (id(btn_sleep).state) id(btn_sleep).publish_state(false); 
+        if (id(btn_auto).state) id(btn_auto).publish_state(false);        
+        if (id(btn_fan).state) id(btn_fan).publish_state(false); 
+        if (id(btn_timer).state) id(btn_timer).publish_state(false);       
+binary_sensor:
+  - platform: template
+    id: btn_power
+  - platform: template
+    id: btn_display
+  - platform: template
+    id: btn_sleep
+  - platform: template
+    id: btn_auto
+  - platform: template
+    id: btn_fan
+  - platform: template
+    id: btn_timer
+
+
 interval:
-  - interval: 5s
+  - interval: 1000ms
     then:
       - lambda: !lambda |-
+          //set mode
           id(spidev).enable();
-          id(spidev).write_byte(0x4F);
+          id(spidev).write_byte(0x03);
+          id(spidev).disable();
+          //set adr
+          id(spidev).enable();
+          id(spidev).write_byte(0x40);
+          id(spidev).disable();
+
+          //data
+          id(spidev).enable();
+          id(spidev).write_byte(0xC0);
+          //14 bytes data
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x80);
+          id(spidev).write_byte(0x10);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).write_byte(0x00);
+          id(spidev).disable();
+          //cmd4
+          id(spidev).enable();
+          id(spidev).write_byte(0x8C);
           id(spidev).disable();
