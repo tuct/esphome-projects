@@ -2,10 +2,13 @@
 esphome:
   name: levoit-lv131s
   on_boot:
-    priority: -100
+    priority: 300
     then:
       - lambda: |-
-          memset(id(display_bits), 0xFF, 14);
+          memset(id(display_bits), 0x0, 14);
+          id(display_bits)[3] = 0x03; // set power to on to force re-render
+          id(update_display).execute();
+
 esp32:
   board: az-delivery-devkit-v4
   framework:
@@ -15,33 +18,45 @@ esp32:
 logger:
 
 # Enable Home Assistant API
-#api:
-#  password: !secret ota_password
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  id: wifi_id
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  passive_scan: true
+  on_connect: 
+    - globals.set:
+        id: wifi_connecting
+        value: '100'
+  on_disconnect: 
+    - globals.set:
+        id: wifi_connecting
+        value: '0'
+
 #
-#ota:
-#  - platform: esphome
-#    password: !secret ota_password
-#
-#wifi:
-#  ssid: !secret wifi_ssid
-#  password: !secret wifi_password
-#
-#  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
 #  ap:
-#    ssid: "Levoit-Lv131S Fallback Hotspot"
+#   ssid: "Levoit-Lv131S Fallback Hotspot"
 #    password: "OMgo8F13ZBYn"
 
 #captive_portal:
 
 #control display
 spi:
-    clk_pin: GPIO21
-    mosi_pin: GPIO22
+    clk_pin: GPIO14
+    mosi_pin: GPIO13
     interface: hardware
 
 spi_device:
     id: spidev
-    cs_pin: GPIO23
+    cs_pin: GPIO15
     data_rate: 500khz
     spi_mode: 0
     bit_order: lsb_first   
@@ -92,6 +107,89 @@ script:
     mode: single
     then:
       - lambda: |-
+          uint8_t before[14];
+          memcpy(before, id(display_bits), 14);
+
+          //Power
+
+          uint8_t bit = 0; 
+          bit=3;
+          if(id(fan_lv131).state){
+            id(display_bits)[bit] = id(display_bits)[bit] | 0x03;
+          }else{
+            memset(id(display_bits), 0x0, 14); //all off, except 1 power
+            id(display_bits)[bit] = id(display_bits)[bit] | 0x01;        
+          }
+          //all other only if power is on!
+          if(id(fan_lv131).state){
+            //WIFI, connnected
+            bit=4;
+            if (id(wifi_id).is_connected()) {
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x80;
+              id(display_bits)[5] = id(display_bits)[5] | 0x01;
+            }else{
+              
+              if(id(wifi_connecting) < 10){
+                id(display_bits)[bit] = id(display_bits)[bit] & ~0x80;
+                id(display_bits)[5] = id(display_bits)[5] & ~0x01;            
+              }else{
+                id(display_bits)[bit] = id(display_bits)[bit] | 0x80;
+                id(display_bits)[5] = id(display_bits)[5] | 0x01;         
+              }    
+              id(wifi_connecting)++;        
+              if(id(wifi_connecting) == 20){
+                id(wifi_connecting)=0;
+              }
+            }  
+
+
+            //Fan speed
+            bit = 12;
+
+            if (id(fan_lv131).state && id(fan_lv131).speed == 1) {
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x18;
+            }else{
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x18;
+            } 
+            
+            if (id(fan_lv131).state && id(fan_lv131).speed == 2) {
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x60;
+            }else{
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x60;
+            } 
+
+            if (id(fan_lv131).state && id(fan_lv131).speed == 3) {
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x80;
+              id(display_bits)[13] = id(display_bits)[13] | 0x01;
+            }else{
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x80;
+              id(display_bits)[13] = id(display_bits)[13] & ~0x01;
+            }  
+
+            //Fan modes
+
+            if (id(fan_lv131).get_preset_mode()  == "Auto") {
+              id(display_bits)[11] = id(display_bits)[11] | 0x02;
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x01;              
+            } else {
+              id(display_bits)[11] = id(display_bits)[11] & ~0x02;
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x01;
+            }
+
+            if (id(fan_lv131).get_preset_mode()  == "Sleep") {
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x06;      
+            } else {
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x06;
+            }    
+
+          }
+
+          //only if id(display_bits) has been changed!
+          if (memcmp(before, id(display_bits), 14) == 0) {
+            // no change → skip SPI
+            return;
+          }
+
           //set mode
           id(spidev).enable();
           id(spidev).write_byte(0x03);
@@ -103,6 +201,16 @@ script:
           //data
           id(spidev).enable();
           id(spidev).write_byte(0xC0);
+
+          //log out
+          int size = 14;
+          char buffer[64];  // make sure it's big enough for 14 bytes
+          int offset = 0;
+          for (int i = 0; i < size; i++) {
+              offset += sprintf(buffer + offset, "%02X ", id(display_bits)[i]);
+          }
+          ESP_LOGI("display", "display_bits after shift: %s", buffer);
+          //logout end
 
           //14 bytes data
           for (int i = 0; i < 14; i++) {
@@ -142,13 +250,46 @@ script:
           }
 
           ESP_LOGI("display", "display_bits after shift: %s", buffer);
-            
-          
+sensor:            
+  - platform: pulse_width
+    name: 'PM1-10 - 1-10μm ug/m3'
+    update_interval: 30s
+    id: sensor_pm
+    state_class: measurement
+    device_class: pm10
+    unit_of_measurement: 'ug/m3'
+    accuracy_decimals: 0
+    pin: 
+      number: GPIO21
+      inverted: true
+      mode:
+        input: true
+    filters:
+      - round_to_multiple_of: 0.01
+      - calibrate_linear:
+          method: exact
+          datapoints:
+            - 0.0 -> 0.0
+            - 0.05 -> 0.0
+            - 0.25 -> 1.0
+            - 1.1 -> 1.0
+      - multiply: 300 
+      - round_to_multiple_of: 1        
 binary_sensor:
   - platform: template
     id: btn_power
+    trigger_on_initial_state: true
+    on_click:
+      min_length: 50ms
+      max_length: 2500ms   
+      then:
+        - fan.toggle: fan_lv131
+        - lambda: |-
+            if(id(fan_lv131).state) id(swi_display).turn_on();
   - platform: template
     id: btn_display
+    on_click:
+       - switch.toggle: swi_display
   - platform: template
     id: btn_sleep
   - platform: template
@@ -205,8 +346,31 @@ globals:
     type: uint8_t
     restore_value: no
     initial_value: '1'
+  - id: wifi_connecting
+    type: uint8_t
+    restore_value: no
+    initial_value: '0'
 
+switch:
+  - platform: template
+    name: "Display"
+    id: swi_display
+    optimistic: true
 
+fan:
+  - platform: template
+    name: "Fan"
+    id: fan_lv131
+    speed_count: 3
+    preset_modes:
+      - Manual
+      - Auto
+      - Sleep    
+
+interval:
+  - interval: 100ms
+    then: 
+      - script.execute: update_display
   
 #interval:
 #  - interval: 1000ms
@@ -244,86 +408,3 @@ globals:
 #          }
 
 
-         
-
- 
-#      - lambda: |-
-#          uint8_t init[14] = {0x10, 0x02, 0x20, 0x00, 0x41, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-#          memcpy(id(display_bits), init, 14);
-#          //id(shift_display_right)->execute(2*id(shift_offset));
-#          id(shift_display_right)->execute(0);
-#          id(update_display).execute();
-#      - delay: 1s
-#      - lambda: |-
-#          uint8_t init[14] = {0x7D, 0x02, 0x07, 0x00, 0x7F, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-#          memcpy(id(display_bits), init, 14);
-#          //id(shift_display_right)->execute(2*id(shift_offset));
-#
-#          id(update_display).execute();
-#      - delay: 1s
-#      - lambda: |-
-#          uint8_t init[14] = {0x6F, 0x02, 0x6F, 0x00, 0x6F, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-#          memcpy(id(display_bits), init, 14);
-#          //id(shift_display_right)->execute(2*id(shift_offset));
-#
-#          id(update_display).execute();
-#      - delay: 1s
-
-#      - lambda: |-
-#          uint8_t init[14] = {0x01,0x00};
-#          memcpy(id(display_bits), init, 14);
-#          id(shift_display_right)->execute(2*id(shift_offset));
-#          id(update_display).execute();
-#      - delay: 1s      
-#      - lambda: |-
-#          uint8_t init[14] = {0x02,0x00};
-#          memcpy(id(display_bits), init, 14);
-#          id(shift_display_right)->execute(2*id(shift_offset));
-#          id(update_display).execute();
-#      - delay: 1s
-#      - lambda: |-
-#          uint8_t init[14] = {0x04,0x00};
-#          memcpy(id(display_bits), init, 14);
-#          id(shift_display_right)->execute(2*id(shift_offset));
-#          id(update_display).execute();
-#      - delay: 1s      
-#      - lambda: |-
-#          uint8_t init[14] = {0x08,0x00};
-#          memcpy(id(display_bits), init, 14);
-#          id(shift_display_right)->execute(2*id(shift_offset));
-#          id(update_display).execute();
-#      - delay: 1s
-#      - lambda: |-
-#          uint8_t init[14] = {0x00,0x01};
-#          memcpy(id(display_bits), init, 14);
-#          id(shift_display_right)->execute(2*id(shift_offset));
-#          id(update_display).execute();
-#      - delay: 1s
-#      - lambda: |-
-#          uint8_t init[14] = {0x00,0x02};
-#          memcpy(id(display_bits), init, 14);
-#          id(shift_display_right)->execute(2*id(shift_offset));
-#          id(update_display).execute();
-#      - delay: 1s      
-#      - lambda: |-   #not used?
-#          uint8_t init[14] = {0x00,0x04};
-#          memcpy(id(display_bits), init, 14);
-#          id(shift_display_right)->execute(2*id(shift_offset));
-#          id(update_display).execute();
-#      - delay: 1s
-#      - lambda: |-  #not used?
-#          uint8_t init[14] = {0x00,0x08};
-#          memcpy(id(display_bits), init, 14);
-#          id(shift_display_right)->execute(2*id(shift_offset));
-#          id(update_display).execute();
-#      - delay: 1s
-#      - lambda: |-  
-#          id(shift_offset)+=1;
-#          
-#         if(id(shift_offset)>6){
-#            id(shift_offset) = 0;
-#          }
-#          int start_byte = id(shift_offset)*2;
-#          ESP_LOGI("display", "Bytes: %d - %d ", start_byte,start_byte+1);
-
- 
