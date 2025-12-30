@@ -56,7 +56,7 @@ spi:
 
 spi_device:
     id: spidev
-    cs_pin: GPIO15
+    cs_pin: GPIO17
     data_rate: 500khz
     spi_mode: 0
     bit_order: lsb_first   
