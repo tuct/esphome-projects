@@ -1,4 +1,4 @@
-#requires  esphome version 2026.01+ (500khz for SPI) 
+#requires custom esphome version (500Khz for SPI) at the moment!
 esphome:
   name: levoit-lv131s
   on_boot:
@@ -10,7 +10,7 @@ esphome:
           id(update_display).execute();
 
 esp32:
-  board: az-delivery-devkit-v4
+  board: seeed_xiao_esp32c3
   framework:
     type: esp-idf
 
@@ -50,43 +50,48 @@ wifi:
 
 #control display
 spi:
-    clk_pin: GPIO14
-    mosi_pin: GPIO13
+    clk_pin: GPIO20 #D7
+    mosi_pin: GPIO10 #D10
     interface: hardware
 
 spi_device:
     id: spidev
-    cs_pin: GPIO17
-    data_rate: 500khz # use 500khz is possible esphome 2026.01+ required!
+    cs_pin: GPIO03 #D1
+    data_rate: 200khz # use 500khz is possible esphome 2026.01+ required!
     spi_mode: 0
     bit_order: lsb_first   
 
 #reading btns
 uart:
-  rx_pin: GPIO16
-  baud_rate: 990
-  data_bits: 7 
-  debug:
-    direction: BOTH
-    dummy_receiver: true
-    after:
-      bytes: 3
-    sequence:
-      - lambda:  |-
-          //UARTDebug::log_hex(direction, bytes, ':'); // show serial bytes
-          //ESP_LOGI("tobi","BTN1 - power press");
-          if(bytes.size()==3){
-            if(bytes[0]==0x1A){
-               if(bytes[1]==0x1B && bytes[2]==0x5A) id(btn_power).publish_state(true); 
-               if(bytes[1]==0x1B && bytes[2]==0x53) id(btn_display).publish_state(true);
-               if(bytes[1]==0x1B && bytes[2]==0x5B) id(btn_sleep).publish_state(true); 
-               if(bytes[1]==0x5B && bytes[2]==0x5A) id(btn_auto).publish_state(true); 
-               if(bytes[1]==0x5B && bytes[2]==0x53) id(btn_fan).publish_state(true); 
-               if(bytes[1]==0x5B && bytes[2]==0x52) id(btn_timer).publish_state(true);          
+  - id: uart_btns
+    rx_pin: GPIO21 #D6
+    baud_rate: 990
+    data_bits: 7 
+    debug:
+      direction: BOTH
+      dummy_receiver: true
+      after:
+        bytes: 3
+      sequence:
+        - lambda:  |-
+            //UARTDebug::log_hex(direction, bytes, ':'); // show serial bytes
+            //ESP_LOGI("tobi","BTN1 - power press");
+            if(bytes.size()==3){
+              if(bytes[0]==0x1A){
+                if(bytes[1]==0x1B && bytes[2]==0x5A) id(btn_power).publish_state(true); 
+                if(bytes[1]==0x1B && bytes[2]==0x53) id(btn_display).publish_state(true);
+                if(bytes[1]==0x1B && bytes[2]==0x5B) id(btn_sleep).publish_state(true); 
+                if(bytes[1]==0x5B && bytes[2]==0x5A) id(btn_auto).publish_state(true); 
+                if(bytes[1]==0x5B && bytes[2]==0x53) id(btn_fan).publish_state(true); 
+                if(bytes[1]==0x5B && bytes[2]==0x52) id(btn_timer).publish_state(true);          
+              }
             }
-          }
-          id(btn_run_check)->stop();
-          id(btn_run_check)->execute();
+            id(btn_run_check)->stop();
+            id(btn_run_check)->execute();
+  - id: uart_sensor
+    rx_pin: GPIO08 #D8
+    tx_pin: GPIO09 #D9
+    baud_rate: 9600
 globals:
   - id: display_bits
     type: uint8_t[14]
@@ -161,16 +166,14 @@ fan:
 output:  
   - platform: ledc
     id: rtttl_out
-    pin: GPIO18
-    channel: 0
+    pin: GPIO04 #D2 
   - platform: gpio
     id: rtttl_out_base
-    pin: GPIO19
+    pin: GPIO05 #D3 
   - platform: ledc
-    pin: GPIO22
+    pin: GPIO06 #D4 
     id: fan_pwm_out
     frequency: 3khz
-    channel: 4
 
 rtttl:
   output: rtttl_out
@@ -211,49 +214,63 @@ number:
           static char buf[6];  // enough for "199:59" + null
           sprintf(buf, "%d:%02d", hh, mm);
           id(timer_text).publish_state(buf);
-sensor:            
-  - platform: pulse_width
-    name: 'PM10'
-    update_interval: 15s
-    id: sensor_pm
-    state_class: measurement
-    device_class: pm10
-    icon: mdi:chemical-weapon
-    unit_of_measurement: 'µg/m³'
-    accuracy_decimals: 0
-    pin: 
-      number: GPIO21
-      inverted: true
-      mode:
-        input: true
-    on_value:
-      - script.execute: update_fan_speed
-    filters:
-      - round_to_multiple_of: 0.01
-      - calibrate_linear:
-          method: exact
-          datapoints:
-            - 0.0 -> 0.0
-            - 0.01 -> 0.0
-            - 0.1 -> 140
-            - 0.15 -> 210
-            - 0.20 -> 285
-            - 0.25 -> 300
-            - 1.1 -> 300
-      - round_to_multiple_of: 1    
-      - sliding_window_moving_average:
-          window_size: 3
-          send_every: 1
+sensor:      
+  - platform: pmsx003
+    type: PMSX003
+    uart_id: uart_sensor
+    pm_1_0:
+      name: "PM <1.0µm "
+    pm_2_5:
+      name: "PM <2.5µm"
+      id: sensor_pm2_5
+      on_value:
+        - script.execute: update_fan_speed
+    pm_10_0:
+      name: "PM <10.0µm"      
+    update_interval: 60s
+#  - platform: pulse_width
+#    name: 'PM10'
+#    update_interval: 15s
+#    id: sensor_pm
+#    state_class: measurement
+#    device_class: pm10
+#    icon: mdi:chemical-weapon
+#    unit_of_measurement: 'µg/m³'
+#    accuracy_decimals: 0
+#    pin: 
+#      number: GPIO07 #D5
+#      inverted: true
+#      mode:
+#        input: true
+#    on_value:
+#      - script.execute: update_fan_speed
+#    filters:
+#      - round_to_multiple_of: 0.01
+#      - calibrate_linear:
+#          method: exact
+#          datapoints:
+#            - 0.0 -> 0.0
+#            - 0.01 -> 0.0
+#            - 0.1 -> 140
+#            - 0.15 -> 210
+#            - 0.20 -> 285
+#            - 0.25 -> 300
+#            - 1.1 -> 300
+#      - round_to_multiple_of: 1    
+#      - sliding_window_moving_average:
+#          window_size: 3
+#          send_every: 1
   - platform: template
     name: "AQI - PM10"
     id: aqi_pm10
     device_class: aqi
     icon: mdi:air-filter
     lambda: |-
-      if (id(sensor_pm).state >= 200)  return 3.0; //red
-      if (id(sensor_pm).state >= 100)  return 2.0; //yellow
-      if (id(sensor_pm).state > 0)  return 1.0; //blue
-      if (id(sensor_pm).state == 0)  return 0.0; //green
+      if (id(sensor_pm2_5).state >= 250)  return 4.0; //red
+      if (id(sensor_pm2_5).state >= 100)  return 3.0; //yellow
+      if (id(sensor_pm2_5).state >= 50)  return 2.0; //yellow
+      if (id(sensor_pm2_5).state >= 25)  return 1.0; //blue
+      if (id(sensor_pm2_5).state == 0)  return 0.0; //green
       return 0;       
     update_interval: 5s 
     on_value:
@@ -279,6 +296,9 @@ sensor:
     entity_category: DIAGNOSTIC
     device_class: battery
     unit_of_measurement: '%'
+    filters:
+      - round_to_multiple_of: 0.01
+      - delta: 0.01
     lambda: |-
       int cfmMin = id(cfm_min_used);
       if(cfmMin==0) return 100.0;
@@ -293,12 +313,14 @@ sensor:
     id: wifi_signal_db
     update_interval: 60s
     entity_category: "diagnostic"
-
+    filters:
+      - delta: 1
 text_sensor:
   - platform: template
     name: "Timer"
     id: timer_text
     icon: mdi:timer-outline
+    
   - platform: wifi_info
     ip_address:
       name: IP
@@ -306,7 +328,7 @@ text_sensor:
 binary_sensor:
   - platform: gpio
     pin: 
-      number: GPIO23
+      number: GPIO02
       inverted: true
       mode:
         input: true
@@ -367,7 +389,7 @@ binary_sensor:
               auto call = id(fan_lv131).turn_on();
               call.set_preset_mode("Sleep");
               call.perform();
-          - script.execute: play_beep  
+          - script.execute: play_beep
       - min_length: 2500ms
         max_length: 5000ms  
         then:
@@ -505,7 +527,7 @@ script:
             if(ps=="Sleep") speed = 0.33f;
 
             //if auto and clean air, turn off pwm, keep fan on!
-            if(ps=="Auto" && id(sensor_pm).state==0.0f) speed = 0.0f;
+            if(ps=="Auto" && id(sensor_pm2_5).state<=1.0f) speed = 0.0f;
             
           }
           ESP_LOGI("TS-setFan","speed: %.2f",speed);
@@ -535,6 +557,7 @@ script:
             if(aqi == 1.0) new_speed = 1;
             if(aqi == 2.0) new_speed = 2;
             if(aqi == 3.0) new_speed = 3;
+            if(aqi == 4.0) new_speed = 3;
             if(id(fan_lv131).speed != new_speed){
               ESP_LOGI("TS","from auto speed up!");
               id(keep_last_fan_mode) = true;
@@ -550,11 +573,9 @@ script:
     then:
       - lambda: |-
           auto ps = id(fan_lv131).get_preset_mode()!=nullptr?id(fan_lv131).get_preset_mode():"";
-          // id(selected_preset) == ps;
-          //on turn on set to Manual
           if(id(fan_lv131).state && ps==""){
             auto call = id(fan_lv131).turn_on();
-            call.set_preset_mode("Manual");
+            call.set_speed(2);
             call.perform();
           }   
   - id: fan_turn_off
@@ -726,7 +747,7 @@ script:
               id(display_bits)[9] = id(display_bits)[9] | 0x03; 
               id(display_bits)[10] = id(display_bits)[10] | 0x06; 
             }
-            if(color == 3 ){
+            if(color >= 3 ){
               //ESP_LOGI("display", "RED");
               id(display_bits)[6] = id(display_bits)[6] | 0x49;
               id(display_bits)[7] = id(display_bits)[7] | 0x02; 
@@ -842,108 +863,3 @@ script:
           id(spidev).enable();
           id(spidev).write_byte(0x8C);
           id(spidev).disable(); 
-
-
-#  - id: shift_display_right
-#    parameters:
-#      n: int
-#    then:
-#      - lambda: |-
-#          int size = 14;
-#          if (n <= 0 || n >= size) {}else{
-#            // Shift right using memmove
-#            memmove(&id(display_bits)[n], &id(display_bits)[0], size - n);
-#
-#            // Fill the leftmost n bytes with 0
-#            for (int i = 0; i < n; i++) {
-#              id(display_bits)[i] = 0x00;
-#            }
-#          
-#          }
-#          //id(display_bits)[0] = 0x0F; //for test 
-#          // Optional: log result
-#          char buffer[64];  // make sure it's big enough for 14 bytes
-#          int offset = 0;
-#
-#          //for (int i = n; i < n+2; i++) {
-#          for (int i = 0; i < size; i++) {
-#              offset += sprintf(buffer + offset, "%02X ", id(display_bits)[i]);
-#          }
-#
-#          ESP_LOGI("display", "display_bits after shift: %s", buffer);
-
-
-
-#interval:
-#  - interval: 1000ms
-#    then:
-#      - lambda: |-
-#          //uint8_t init[14] = {0xF0, 0x00};
-#          //memcpy(id(display_bits), init, 14);
-#          
-#     
-#        
-#          // Optional: clear all first
-#          memset(id(display_bits), 0x00, 14);
-#
-#          // Set ONLY the first byte
-#          id(display_bits)[0] = id(byte_loop);
-#
-#          ESP_LOGI("display", "display_bits[0] = 0x%02X", id(byte_loop));
-#          id(shift_display_right)->execute(id(shift_offset));
-#          id(update_display).execute();
-#          // Increment 0x00 → 0xFF → wrap
-#          if (id(byte_loop) >= 0x80){
-#            id(byte_loop) = 0x01;
-#            id(shift_offset)+=1;
-#            if(id(shift_offset)>13){
-#              id(shift_offset) = 0;
-#            }
-#            int start_byte = id(shift_offset);
-#            ESP_LOGI("display", "Byte: %d ", start_byte);
-#
-#
-#          }else{
-#             id(byte_loop) =  id(byte_loop)*2;
-#            //id(byte_loop)++;
-#            //id(byte_loop) = 0x41;         
-#          }
-
-
-# TEST code only used to identify the use leds by shifting a 1 through the full display memory!    
-#  - platform: gpio
-#    pin: 
-#      number: GPIO04
-#      inverted: true
-#      mode:
-#        input: true
-#        pullup: true
-#    internal: true
-#    id: test
-#    on_click: 
-#      - lambda: |-
-#          //clear all
-#          memset(id(display_bits), 0x00, 14);
-#
-#          // Set ONLY the first byte
-#          id(display_bits)[0] = id(byte_loop);
-#
-#          ESP_LOGI("display", "display_bits[0] = 0x%02X", id(byte_loop));
-#          id(shift_display_right)->execute(id(shift_offset));
-#          id(update_display).execute();
-#          // 01,02,04,08,10,20,40,80 for each byte to test leds!
-#
-#          // Increment 0x00 → 0xFF → wrap
-#          if (id(byte_loop) >= 0x80){
-#            id(byte_loop) = 0x01;
-#            id(shift_offset)+=1;
-#            if(id(shift_offset)>13){
-#              id(shift_offset) = 0;
-#            }
-#            int start_byte = id(shift_offset);
-#            ESP_LOGI("display", "Byte: %d ", start_byte);
-#          }else{
-#             id(byte_loop) =  id(byte_loop)*2;
-#            //id(byte_loop)++;
-#            //id(byte_loop) = 0x41;         
-#          }

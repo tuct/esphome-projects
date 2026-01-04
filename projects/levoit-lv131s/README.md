@@ -1,5 +1,109 @@
 # Levoit LV-PUR131S 
 
+This model is not sold anymore and often suffered from a sudden death syndrom!
+
+Some links:
+
+- https://www.reddit.com/r/AirPurifiers/comments/1idc5nu/levoit_air_purifiers_manufacturing_defect/
+- https://www.youtube.com/watch?v=-IfPcGs717E
+- https://www.youtube.com/watch?v=RJjbAqp-lw4
+
+Looks like some overvoltage getting to the MCU / PCB. In my case a diode was fried as well as the main MCU (ESP12F).
+Lukily i got a replacement unit from Levoit under warranty!
+This allowed me to reverse engineer the PCB and create an esphome based firmware.
+
+
+
+
+MCU upgraded to ESP32-C3, Sensor to PM5003.
+
+I wanted to keep the working  ESP12F but i fried it during my hack... so i replaced it with an xiao seeed esp32-c3.
+
+The PM1003 sensor that is used originally, really sucks and i had some spare PM5003 at home, so i decided to upgrade the sensor as well. Code for the original PM1003 is still here but commented out.
+
+
+
+
+
+## Features
+
+- Home Assistant without Cloud!
+  - Fully Fan support with 3 Modes
+  - Filter Life-Time tracking, based on actual usage
+- All features from original
+    - 3 Manual Speeds
+    - Timer 30min to 12h
+    - Sleep and Auto Mode
+    - Display On/Off
+- Can play doom! (Song)
+- Sound On/Off and if On, only if buttons are pressed, not if remote controled!
+- Improved PM Sensor PM5003 vs PM1003 (really sucks!)
+
+
+
+
+## Required 
+
+### Parts
+
+- Broken or working Levoit LV-PUR131S
+- Xiao seeed esp32-c3
+- PM5003 particle sensor
+- Wires and some connectors
+
+### Tools
+
+- Soldering Iron
+
+## De-Assembly
+
+
+[Video - Start to 1:40](https://www.youtube.com/watch?v=RJjbAqp-lw4)
+
+- Remove all screws on the outside (white plastic), 3 on bottom, 2 top (left and right, long screwdriver!).
+- Remove the Filter
+- Remove all screws, one is a triangle shaped one!
+- Open the front carfully from the bottom
+
+
+My power supplies are still working, if needed get a 24V DV like a Meanwell LRS 50-24 + aa 24V to 5V bucket converter.
+
+- Unplug the Switch for checking if the back is open 
+- Unplug the connection to the MCU
+- Unscrew all screws holding the Fan base in
+- Remove the Fan base from the bottom
+- Unplug the Sensor and unscrew it 
+- To remove the PCB (Optional!?)
+  - First screw can easily be unscrewed
+  - i used pliers for the other 2 ones, as i would need to remove the top panel and i did not find a way todo this undestrutive.
+
+## Hack / Modify PCB 
+
+Might be possible without removing the PCB! i did not try but it seems there is enough room!
+Soldering is a bit hard/wired, some protective film seems to be applied.
+
+
+- Remove the old MCU or cut power and gnd at least
+- Unplug the old sensor from the case
+- I used Power and GND from the old sensor and added 2 wires for the UART of the PM 5003, this allows to still use the reset BTN!
+  ![new sensor](./images/new_sensor.jpg)
+  ![pm5003 pinout](./images/PMS5003-PINOUT.jpg)
+- Solder the wires for the new MCU
+  ![pcb siwith wiresde](./images/board_wired2.jpg)
+  D5 is not required if PM5003 is used!
+- Flash Firmware, adopt secrets.yaml with esphome, min version 2026.01
+- Connect MCU to PCB, secure with hot glue
+
+## Assembly
+
+Just do the steps in reverse!
+
+
+
+
+
+
+
 
 
 ## Hardware
@@ -7,6 +111,9 @@
 Not like the other Levoits i have, only uses one ESP12F and no 2nd MCU
 
 MCU: ESP12F 
+
+Fan / Main Power: 24V DC
+PCB: 5V
 
 
 ### PCB
@@ -16,6 +123,9 @@ MCU: ESP12F
 ![pcb back](./images/pcp_back.png)
 
 ![pcb side](./images/pcp_side.png)
+
+
+TODO add fried version!
 
 
 #### ESP12F Pinout
@@ -64,8 +174,8 @@ Start cmd: 0x1A
 | BTN6   | 0x5B  | 0x52   | timer|
     
 #### PM1003
-PWM/AQI ->GPIO03
-Reset -> GPIO02
+PWM/AQI -> GPIO03
+Reset -> GPIO02 (pulled high? oin press connect to gnd)
 
 #### Fan - PWM out 
 GPIO04
@@ -109,6 +219,8 @@ b1.0x20 => 0x00 0x20 ....
 ```
 b3.0x01 (top)
 b3.0x02 (bottom)
+
+=> 0x00 00 00 03 00 00 00 00 00 00 00 00 00 00
 ```
 
 ### Wifi
@@ -158,7 +270,7 @@ b13.0x02
 only F and E!
 ```
 F: b0.0x80
-E: b1.0x02
+E: b1.0x01
 
 ```
 #### Digit 2
@@ -224,6 +336,9 @@ b8.20 r  [ x  ]
 b9.01 r  [  x ]
 b10.02 r [   x]
 
+
+
+
 b6.02 g  [x   ]
 b6.10 g  [ x  ]
 b6.80 g  [  x ]
@@ -233,6 +348,9 @@ b8.40 g  [ x  ]
 b9.02 g  [  x ]
 b10.04 g [   x]
 
+
+
+
 b6.04 b  [x   ]
 b6.20 b  [ x  ]
 b7.01 b  [  x ]
@@ -241,6 +359,30 @@ b8.10 b  [x   ]
 b8.80 b  [ x  ]
 b10.01 b [  x ]
 b10.08 b [   x]
+
+
+RED -> all red bits
+b6.49
+b7.02
+b8.24
+b9.01
+b10.02
+
+blue
+b6.24
+b7.01
+b8.92
+b10.09
+
+yellow:
+DB 02 6D 03 06 00 00 00 => Yellow
+
+b6.db
+b7.02
+b8.6D
+b9.03
+b10.06
+
 ```
 
 
