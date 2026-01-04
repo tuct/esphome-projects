@@ -1,6 +1,6 @@
 # Smartified Levoit Mini
 
-Custom PCB, 3D Prionted Parts and Firmware (esphome based) to smartify the Levoit Mini Ait Purifier
+Custom PCB, 3D Printed Parts and Firmware (esphome based) to smartify the Levoit Mini Air Purifier
 ![a](./photos/da_06.jpg)
 
 

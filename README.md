@@ -22,6 +22,11 @@ Here is a list of all 4 models, running with esphome, Core300/400s do not need a
 * [levoit-lv-pur131s](./projects/levoit-lv131s/), (esphome, pcb hack, extra hardware) - Custom Firmware + better MCU and Sensor, plays Doom!
 * [levoit-mini](./projects/levoit-mini), (esphome, 3d parts, custom pcb, extra hardware) - Smartify the Levoit Mini, Custom Hardware and Firmware
 
+Not my projects, but worth checking out:
+* https://github.com/targor/levoit_vital/?tab=readme-ov-file
+* https://github.com/mulcmu/esphome-levoit-core300s
+* https://github.com/acvigue/esphome-levoit-air-purifier
+
 
 ## Projects
 
