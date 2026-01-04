@@ -1,6 +1,6 @@
-#requires  esphome version 2026.01+ (500khz for SPI) 
+#requires custom esphome version (500Khz for SPI) at the moment!
 esphome:
-  name: levoit-lv131s
+  name: !secret name
   on_boot:
     priority: 300
     then:
@@ -56,8 +56,8 @@ spi:
 
 spi_device:
     id: spidev
-    cs_pin: GPIO17
-    data_rate: 500khz # use 500khz is possible esphome 2026.01+ required!
+    cs_pin: GPIO15
+    data_rate: 500khz
     spi_mode: 0
     bit_order: lsb_first   
 
@@ -87,558 +87,9 @@ uart:
           }
           id(btn_run_check)->stop();
           id(btn_run_check)->execute();
-globals:
-  - id: display_bits
-    type: uint8_t[14]
-    restore_value: no
-  - id: shift_offset
-    type: uint8_t
-    restore_value: no
-    initial_value: '11'
-  - id: byte_loop
-    type: uint8_t
-    restore_value: no
-    initial_value: '1'
-  - id: wifi_connecting
-    type: uint8_t
-    restore_value: no
-    initial_value: '0'
-  - id: last_fan_mode
-    type: std::string
-    restore_value: no
-    initial_value: '"Manual"'
-  - id: keep_last_fan_mode
-    type: bool
-    restore_value: no
-    initial_value: 'false'    
-  - id: cfm_min_used
-    type: int
-    restore_value: yes
-    initial_value: '0'
-  - id: show_dots
-    type: bool
-    restore_value: no
-    initial_value: 'false' 
-switch:
-  - platform: template
-    name: "Display"
-    id: swi_display
-    restore_mode: ALWAYS_ON
-    optimistic: true
-    entity_category: CONFIG
-    icon: "mdi:lightbulb-outline"
-  - platform: template
-    name: "Sound"
-    id: swi_sound
-    restore_mode: RESTORE_DEFAULT_ON
-    optimistic: true
-    entity_category: CONFIG
-    icon: "mdi:volume-high"
-
-fan:
-  - platform: template
-    name: "Fan"
-    id: fan_lv131
-    speed_count: 3
-    restore_mode: ALWAYS_OFF
-    preset_modes:
-      - Manual
-      - Auto
-      - Sleep    
-    on_state:
-    - script.execute: update_fan_speed
-    on_turn_on:
-    - script.execute: fan_turn_on
-    on_turn_off:
-    - script.execute: fan_turn_off
-    on_preset_set:
-    - script.execute: fan_update_preset
-    on_speed_set:
-    - script.execute: fan_update_speed
-
-
-
-output:  
-  - platform: ledc
-    id: rtttl_out
-    pin: GPIO18
-    channel: 0
-  - platform: gpio
-    id: rtttl_out_base
-    pin: GPIO19
-  - platform: ledc
-    pin: GPIO22
-    id: fan_pwm_out
-    frequency: 3khz
-    channel: 4
-
-rtttl:
-  output: rtttl_out
-  id: my_rtttl
-  gain: 60%
-
-number:
-  - platform: template
-    id: max_filter_months
-    entity_category:  config
-    icon: mdi:air-filter
-    name: "Filter life time (months)"
-    optimistic: true
-    min_value: 1
-    max_value: 12
-    initial_value: 6
-    restore_value: true
-    step: 1
-  - platform: template
-    id: timer_min
-    optimistic: true
-    min_value: 0
-    max_value: 720
-    initial_value: 0
-    restore_value: false
-    step: 1
-    on_value:
-      then: 
-        lambda: |-
-          int total_min = id(timer_min).state;
-          if(total_min==0){
-            id(timer_text).publish_state("Off");
-            return;
-          }
-          if (total_min > 720) total_min = 720;  // clamp max if needed
-          int hh = total_min / 60;
-          int mm = total_min % 60;
-          static char buf[6];  // enough for "199:59" + null
-          sprintf(buf, "%d:%02d", hh, mm);
-          id(timer_text).publish_state(buf);
-sensor:            
-  - platform: pulse_width
-    name: 'PM10'
-    update_interval: 15s
-    id: sensor_pm
-    state_class: measurement
-    device_class: pm10
-    icon: mdi:chemical-weapon
-    unit_of_measurement: 'µg/m³'
-    accuracy_decimals: 0
-    pin: 
-      number: GPIO21
-      inverted: true
-      mode:
-        input: true
-    on_value:
-      - script.execute: update_fan_speed
-    filters:
-      - round_to_multiple_of: 0.01
-      - calibrate_linear:
-          method: exact
-          datapoints:
-            - 0.0 -> 0.0
-            - 0.01 -> 0.0
-            - 0.1 -> 140
-            - 0.15 -> 210
-            - 0.20 -> 285
-            - 0.25 -> 300
-            - 1.1 -> 300
-      - round_to_multiple_of: 1    
-      - sliding_window_moving_average:
-          window_size: 3
-          send_every: 1
-  - platform: template
-    name: "AQI - PM10"
-    id: aqi_pm10
-    device_class: aqi
-    icon: mdi:air-filter
-    lambda: |-
-      if (id(sensor_pm).state >= 200)  return 3.0; //red
-      if (id(sensor_pm).state >= 100)  return 2.0; //yellow
-      if (id(sensor_pm).state > 0)  return 1.0; //blue
-      if (id(sensor_pm).state == 0)  return 0.0; //green
-      return 0;       
-    update_interval: 5s 
-    on_value:
-      then:
-        - script.execute: update_fan_auto_speed
-    filters:
-      - delta: 1.0
-  - platform: template
-    name: "Current CFM"
-    id: current_cfm
-    filters:
-      - delta: 1.0
-    update_interval: 1s
-    entity_category: DIAGNOSTIC
-    icon: mdi:air-filter
-    device_class: volume_flow_rate
-    unit_of_measurement: CFM
-    accuracy_decimals: 0
-  - platform: template
-    name: "Filter"
-    accuracy_decimals: 1
-    id: filter_life_left
-    entity_category: DIAGNOSTIC
-    device_class: battery
-    unit_of_measurement: '%'
-    lambda: |-
-      int cfmMin = id(cfm_min_used);
-      if(cfmMin==0) return 100.0;
-      int maxMonths = (int)id(max_filter_months).state;
-      int maxCFMMin = maxMonths*30*60*24*135; 
-      float percent = (1 - ((float)min(cfmMin,maxCFMMin)/maxCFMMin))*100;
-      //ESP_LOGI("main", "Percent [%f] max: [%d] current: [%d]  ", percent,maxCFMMin,cfmMin);
-      return percent;
-    update_interval: 10s
-  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
-    name: "WiFi Signal dB"
-    id: wifi_signal_db
-    update_interval: 60s
-    entity_category: "diagnostic"
-
-text_sensor:
-  - platform: template
-    name: "Timer"
-    id: timer_text
-    icon: mdi:timer-outline
-  - platform: wifi_info
-    ip_address:
-      name: IP
-
-binary_sensor:
-  - platform: gpio
-    pin: 
-      number: GPIO23
-      inverted: true
-      mode:
-        input: true
-        pullup: true
-    internal: true
-    id: reset
-    on_press:
-      then: 
-        - delay: 5000ms
-        - script.execute: play_beep
-    on_click:
-      min_length: 5000ms
-      max_length: 10000ms
-      then:
-        - script.execute: play_beep
-        - globals.set:
-            id: cfm_min_used
-            value: '0'
-  - platform: template
-    id: replace_filter
-    name: Replace filter
-    device_class: smoke
-    icon: mdi:air-filter
-    trigger_on_initial_state: true
-    condition:
-      sensor.in_range:
-        id: filter_life_left 
-        below: 5.0
-  - platform: template
-    id: btn_power
-    trigger_on_initial_state: true
-    on_click:
-      min_length: 50ms
-      max_length: 2500ms   
-      then:
-        - fan.toggle: fan_lv131
-        - switch.turn_on: swi_display
-        - script.execute: play_beep
-
-  - platform: template
-    id: btn_display
-    trigger_on_initial_state: true
-    on_click:
-      min_length: 50ms
-      max_length: 2500ms  
-      then:
-       - switch.toggle: swi_display
-       - script.execute: play_beep
-
-  - platform: template
-    id: btn_sleep
-    trigger_on_initial_state: true
-    on_click:
-      - min_length: 50ms
-        max_length: 2500ms  
-        then:
-          - lambda: |-
-              auto call = id(fan_lv131).turn_on();
-              call.set_preset_mode("Sleep");
-              call.perform();
-          - script.execute: play_beep  
-      - min_length: 2500ms
-        max_length: 5000ms  
-        then:
-          - script.execute: play_doom
-
-  - platform: template
-    id: btn_auto
-    trigger_on_initial_state: true
-    on_click:
-      min_length: 50ms
-      max_length: 2500ms  
-      then:
-        - lambda: |-
-            auto call = id(fan_lv131).turn_on();
-            call.set_preset_mode("Auto");
-            call.perform();
-        - script.execute: play_beep
-
-  - platform: template
-    id: btn_fan
-    trigger_on_initial_state: true
-    on_click:
-      min_length: 50ms
-      max_length: 2500ms  
-      then:
-        - lambda: |-
-            auto call = id(fan_lv131).turn_on();
-            call.set_preset_mode("Manual");
-            call.perform();
-        - delay: 50ms
-        - fan.cycle_speed:
-            id: fan_lv131
-            off_speed_cycle: false
-        - script.execute: play_beep
-
-  - platform: template
-    id: btn_timer
-    trigger_on_initial_state: true
-    on_click:
-      min_length: 50ms
-      max_length: 2500ms  
-      then:
-        - script.execute: cycle_timer
-        - script.execute: play_beep
-
-button:
-  - platform: template
-    name: "Reset filter"
-    entity_category: CONFIG 
-    icon: mdi:air-filter
-    on_press:
-      - globals.set:
-          id: cfm_min_used
-          value: '0'
-
-  - platform: template
-    name: "Play Doom Song"
-    entity_category: CONFIG
-    icon: mdi:emoticon-devil
-    on_press:
-      - lambda: |-
-          auto call = id(fan_lv131).turn_on();
-          call.set_preset_mode("Sleep");
-          call.perform();
-      - delay: 100ms
-      - script.execute: play_doom
-
-  - platform: template
-    name: "Timer"
-    icon: mdi:timer-outline
-    on_press:
-      - script.execute: cycle_timer
-
-interval:
-  - interval: 100ms
-    then: 
-      - script.execute: update_display
-
-  - interval: 1s
-    then: 
-      - lambda: |-
-          if(id(timer_min).state>0){
-            id(show_dots) = !id(show_dots);
-          }
-
-  - interval: 60s
-    then: 
-      - lambda: |-
-          bool power = id(fan_lv131).state;
-          if(power && id(timer_min).state > 0){
-              auto call = id(timer_min).make_call();
-              auto new_val = id(timer_min).state-1;
-              call.set_value(new_val);
-              call.perform();
-              if(new_val == 0){
-                auto call2 = id(fan_lv131).turn_off();
-                call2.perform();
-              }
-          }          
-          if(power){
-            id(cfm_min_used) += id(current_cfm).state;
-          }
+#ensure we turn off binary after no input
 script:
-  - id: cycle_timer
-    mode: restart
-    then:
-      lambda: |-
-        int timer_min_left = (int) id(timer_min).state;
-        int new_val;
-        if (timer_min_left < 120) {
-          new_val = ((timer_min_left / 30) + 1) * 30;
-        } else {
-          new_val = ((timer_min_left - 180) / 60 + 1) * 60 + 180;
-        }
-        if (new_val > 720) new_val = 0;
-        auto call = id(timer_min).make_call();
-        call.set_value(new_val);
-        call.perform();
-
-  - id: update_fan_speed
-    mode: restart
-    then:
-      - delay: 100ms
-      - lambda: |- 
-          float speed = 0;
-          if(id(fan_lv131).state){
-            auto ps = id(fan_lv131).get_preset_mode()!=nullptr?id(fan_lv131).get_preset_mode():"";
-            switch (id(fan_lv131).speed) {
-              case 1: speed = 0.4f; break;
-              case 2: speed = 0.6f; break; 
-              case 3: speed = 0.8f; break; 
-              default: speed = 0.0f; break;
-            }
-            //special speed for sleep
-            if(ps=="Sleep") speed = 0.33f;
-
-            //if auto and clean air, turn off pwm, keep fan on!
-            if(ps=="Auto" && id(sensor_pm).state==0.0f) speed = 0.0f;
-            
-          }
-          ESP_LOGI("TS-setFan","speed: %.2f",speed);
-          if(speed>0){
-            id(fan_pwm_out).turn_on();
-            if(speed==0.33f)id(current_cfm).publish_state(55.68f); //135/0.8*0.33
-            if(speed==0.4f)id(current_cfm).publish_state(67.5f); //135/0.8*0.4
-            if(speed==0.6f)id(current_cfm).publish_state(101.25f); //135/0.8*0.6
-            if(speed==0.8f)id(current_cfm).publish_state(135.0f); //135
-            id(fan_pwm_out).set_level(speed);
-          }else{
-            id(current_cfm).publish_state(0.0f);
-            id(fan_pwm_out).turn_off();
-          }
-
-  - id: update_fan_auto_speed
-    mode: restart
-    then:
-      - lambda: |-
-          auto ps = id(fan_lv131).get_preset_mode()!=nullptr?id(fan_lv131).get_preset_mode():"";
-          if (ps =="Auto"){
-            ESP_LOGI("TS","from auto speed");
-            auto aqi = id(aqi_pm10).state;
-            //only if different!!!!!  
-            uint8_t new_speed = 1;
-            if(aqi == 0.0) new_speed = 1;
-            if(aqi == 1.0) new_speed = 1;
-            if(aqi == 2.0) new_speed = 2;
-            if(aqi == 3.0) new_speed = 3;
-            if(id(fan_lv131).speed != new_speed){
-              ESP_LOGI("TS","from auto speed up!");
-              id(keep_last_fan_mode) = true;
-              auto call  = id(fan_lv131).turn_on();
-              call.set_speed(new_speed);
-              call.perform();
-            }
-
-          }
-
-  - id: fan_turn_on
-    mode: restart
-    then:
-      - lambda: |-
-          auto ps = id(fan_lv131).get_preset_mode()!=nullptr?id(fan_lv131).get_preset_mode():"";
-          // id(selected_preset) == ps;
-          //on turn on set to Manual
-          if(id(fan_lv131).state && ps==""){
-            auto call = id(fan_lv131).turn_on();
-            call.set_preset_mode("Manual");
-            call.perform();
-          }   
-  - id: fan_turn_off
-    mode: restart
-    then:
-      - number.set:
-          id: timer_min
-          value: 0
-  - id: fan_update_preset
-    mode: restart
-    then:
-      - delay: 10ms
-      - lambda: |-
-          const char *ps = id(fan_lv131).get_preset_mode()!=nullptr?id(fan_lv131).get_preset_mode():"";
-          ESP_LOGI("TS","from preset, current: %s",ps);
-          ESP_LOGI("TS","Last %s",id(last_fan_mode).c_str());
-          //ignore empty ps
-          if(ps && ps != ""){
-            //save last ps
-            id(last_fan_mode) = ps;
-            // on preset turn on!
-            if(!id(fan_lv131).state ){
-              auto call = id(fan_lv131).turn_on();
-              call.set_preset_mode(ps);
-              call.perform();
-            }
-            if(ps=="Sleep" && id(fan_lv131).speed != 1){
-              id(keep_last_fan_mode) = true;
-              auto call = id(fan_lv131).turn_on();
-              call.set_speed(1);
-              call.perform();
-            }
-          }
-      - delay: 50ms
-      - script.execute: update_fan_auto_speed
-
-  - id: fan_update_speed
-    mode: restart
-    then:
-      - lambda: |-
-          if(id(fan_lv131).state){
-            auto ps = id(fan_lv131).get_preset_mode()!=nullptr?id(fan_lv131).get_preset_mode():"";
-            auto last_ps = id(last_fan_mode);
-            auto call = id(fan_lv131).turn_on();
-            if(id(keep_last_fan_mode)){
-              call.set_preset_mode(last_ps);  
-              id(keep_last_fan_mode) = false;
-            }else{
-              call.set_preset_mode("Manual"); 
-            }
-            call.perform();
-          }
-
-  - id: play_beep
-    mode: restart
-    then:
-      - if:
-          condition:
-            and:
-              - switch.is_on: swi_sound
-              - not: rtttl.is_playing
-          then:
-            - output.turn_on: rtttl_out_base
-            - delay: 50ms
-            - rtttl.play: 'bling:d=16,o=6,b=140:e6,32p,d6'
-            - delay: 50ms
-            - output.turn_off: rtttl_out_base  
-
-  - id: play_doom
-    mode: restart
-    then:
-      - if:
-          condition:
-            and:
-              - switch.is_on: swi_sound
-              - not: rtttl.is_playing
-          then:
-            - output.turn_on: rtttl_out_base
-            - delay: 50ms
-            - rtttl.play: "AtDoomsGate:d=4,o=4,b=132:e,e,e,e,8e,8d,e,e,e,e,8e,8d,e,e,e,e,8e,8d,e,e,e,e,8e,8d,g,g,a,c5,g,g,a,c5,e5,e5,d5,c5,a,g,e5,e5,d5,c5,a,g"
-            - delay: 19s
-            - output.turn_off: rtttl_out_base   
-  
-  - id: btn_run_check #ensure we turn off binary after no input
+  - id: btn_run_check
     mode: restart
     then:
       - delay: 90ms
@@ -651,155 +102,85 @@ script:
           if (id(btn_sleep).state) id(btn_sleep).publish_state(false); 
           if (id(btn_auto).state) id(btn_auto).publish_state(false);        
           if (id(btn_fan).state) id(btn_fan).publish_state(false); 
-          if (id(btn_timer).state) id(btn_timer).publish_state(false);   
-
+          if (id(btn_timer).state) id(btn_timer).publish_state(false);    
   - id: update_display
     mode: single
     then:
       - lambda: |-
           uint8_t before[14];
           memcpy(before, id(display_bits), 14);
-          //set all to 0
-          memset(id(display_bits), 0x0, 14); //all off, except 1 power
-          
-          bool display_on = id(swi_display).state;
+
           //Power
+
+          uint8_t bit = 0; 
+          bit=3;
           if(id(fan_lv131).state){
-            if(display_on) id(display_bits)[3] = id(display_bits)[3] | 0x03;
+            id(display_bits)[bit] = id(display_bits)[bit] | 0x03;
           }else{
-            if(display_on) id(display_bits)[3] = id(display_bits)[3] | 0x01;        
+            memset(id(display_bits), 0x0, 14); //all off, except 1 power
+            id(display_bits)[bit] = id(display_bits)[bit] | 0x01;        
           }
-
-          // Filter 
-          if(display_on && id(replace_filter).state){
-            id(display_bits)[5] = id(display_bits)[5] | 0x02;
-            id(display_bits)[13] = id(display_bits)[13] | 0x02;   
-          }
-
-          //all other only if power and display are on!
-          if(id(fan_lv131).state && display_on){
+          //all other only if power is on!
+          if(id(fan_lv131).state){
             //WIFI, connnected
+            bit=4;
             if (id(wifi_id).is_connected()) {
-              id(display_bits)[4] = id(display_bits)[4] | 0x80;
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x80;
               id(display_bits)[5] = id(display_bits)[5] | 0x01;
             }else{
               
               if(id(wifi_connecting) < 10){
-                id(display_bits)[4] = id(display_bits)[4] & ~0x80;
+                id(display_bits)[bit] = id(display_bits)[bit] & ~0x80;
                 id(display_bits)[5] = id(display_bits)[5] & ~0x01;            
               }else{
-                id(display_bits)[4] = id(display_bits)[4] | 0x80;
+                id(display_bits)[bit] = id(display_bits)[bit] | 0x80;
                 id(display_bits)[5] = id(display_bits)[5] | 0x01;         
               }    
               id(wifi_connecting)++;        
               if(id(wifi_connecting) == 20){
-                id(wifi_connecting) = 0;
+                id(wifi_connecting)=0;
               }
             }  
 
-            //AQI
-            auto color = id(aqi_pm10).state;
-            if (id(play_doom).is_running()) {
-                color = esp_random() % 3;
-                if(color==2)color=3; //red not yellow
-            }
-            
-            if(color ==  0){ // green 
-              //ESP_LOGI("display", "GREEN");
-              id(display_bits)[6] = id(display_bits)[6] | 0x92;
-              id(display_bits)[8] = id(display_bits)[8] | 0x49; 
-              id(display_bits)[9] = id(display_bits)[9] | 0x02; 
-              id(display_bits)[10] = id(display_bits)[10] | 0x04; 
-            }
-            if(color == 1 ){ // blue
-              //ESP_LOGI("display", "BLUE");
-              id(display_bits)[6] = id(display_bits)[6] | 0x24;
-              id(display_bits)[7] = id(display_bits)[7] | 0x01; 
-              id(display_bits)[8] = id(display_bits)[8] | 0x92; 
-              id(display_bits)[10] = id(display_bits)[10] | 0x09; 
-            }
-            if(color == 2 ){
-              //ESP_LOGI("display", "YELLOW");
-              id(display_bits)[6] = id(display_bits)[6] | 0xDB;
-              id(display_bits)[7] = id(display_bits)[7] | 0x02; 
-              id(display_bits)[8] = id(display_bits)[8] | 0x6D; 
-              id(display_bits)[9] = id(display_bits)[9] | 0x03; 
-              id(display_bits)[10] = id(display_bits)[10] | 0x06; 
-            }
-            if(color == 3 ){
-              //ESP_LOGI("display", "RED");
-              id(display_bits)[6] = id(display_bits)[6] | 0x49;
-              id(display_bits)[7] = id(display_bits)[7] | 0x02; 
-              id(display_bits)[8] = id(display_bits)[8] | 0x24; 
-              id(display_bits)[9] = id(display_bits)[9] | 0x01; 
-              id(display_bits)[10] = id(display_bits)[10] | 0x02; 
-            }
-
-            // numbers
-            
-            if(id(timer_min).state>0){ //if timer
-              if(id(show_dots))id(display_bits)[1] = id(display_bits)[1] | 0x02; //dots
-              id(display_bits)[10] = id(display_bits)[10] | 0x20; //h
-              static const uint8_t SEG7_MAP[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F,0x6F };
-              auto total_min = (int)id(timer_min).state;
-            
-              int hh = total_min / 60;
-              int mm = total_min % 60;
-              int hh_t = (hh / 10) % 10;
-              int hh_o = hh % 10;
-              int mm_t = mm / 10;
-              int mm_o = mm % 10;
-
-              if(hh_t==1){
-                id(display_bits)[0] = id(display_bits)[0] | 0x80; //top
-                id(display_bits)[1] = id(display_bits)[1] | 0x01; // 01,02,04,08,10,20,40,80
-              }
-              id(display_bits)[0] = id(display_bits)[0] | SEG7_MAP[hh_o]; 
-              id(display_bits)[2] = id(display_bits)[2] | SEG7_MAP[mm_t]; 
-              id(display_bits)[4] = id(display_bits)[4] | SEG7_MAP[mm_o]; 
-            }
-
-
 
             //Fan speed
-
+            bit = 12;
 
             if (id(fan_lv131).state && id(fan_lv131).speed == 1) {
-              id(display_bits)[12] = id(display_bits)[12] | 0x18;
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x18;
             }else{
-              id(display_bits)[12] = id(display_bits)[12] & ~0x18;
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x18;
             } 
             
             if (id(fan_lv131).state && id(fan_lv131).speed == 2) {
-              id(display_bits)[12] = id(display_bits)[12] | 0x60;
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x60;
             }else{
-              id(display_bits)[12] = id(display_bits)[12] & ~0x60;
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x60;
             } 
 
             if (id(fan_lv131).state && id(fan_lv131).speed == 3) {
-              id(display_bits)[12] = id(display_bits)[12] | 0x80;
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x80;
               id(display_bits)[13] = id(display_bits)[13] | 0x01;
             }else{
-              id(display_bits)[12] = id(display_bits)[12] & ~0x80;
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x80;
               id(display_bits)[13] = id(display_bits)[13] & ~0x01;
             }  
 
             //Fan modes
-            auto psm = id(fan_lv131).get_preset_mode()!=nullptr?id(fan_lv131).get_preset_mode():"";
-            if (psm  == "Auto") {
+
+            if (id(fan_lv131).get_preset_mode()  == "Auto") {
               id(display_bits)[11] = id(display_bits)[11] | 0x02;
-              id(display_bits)[12] = id(display_bits)[12] | 0x01;              
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x01;              
             } else {
               id(display_bits)[11] = id(display_bits)[11] & ~0x02;
-              id(display_bits)[12] = id(display_bits)[12] & ~0x01;
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x01;
             }
 
-            if (psm  == "Sleep") {
-              id(display_bits)[12] = id(display_bits)[12] | 0x06;      
+            if (id(fan_lv131).get_preset_mode()  == "Sleep") {
+              id(display_bits)[bit] = id(display_bits)[bit] | 0x06;      
             } else {
-              id(display_bits)[12] = id(display_bits)[12] & ~0x06;
-            } 
- 
+              id(display_bits)[bit] = id(display_bits)[bit] & ~0x06;
+            }    
 
           }
 
@@ -842,38 +223,155 @@ script:
           id(spidev).enable();
           id(spidev).write_byte(0x8C);
           id(spidev).disable(); 
+  - id: shift_display_right
+    parameters:
+      n: int
+    then:
+      - lambda: |-
+          int size = 14;
+          if (n <= 0 || n >= size) {}else{
+            // Shift right using memmove
+            memmove(&id(display_bits)[n], &id(display_bits)[0], size - n);
 
+            // Fill the leftmost n bytes with 0
+            for (int i = 0; i < n; i++) {
+              id(display_bits)[i] = 0x00;
+            }
+          
+          }
+          //id(display_bits)[0] = 0x0F; //for test 
+          // Optional: log result
+          char buffer[64];  // make sure it's big enough for 14 bytes
+          int offset = 0;
 
-#  - id: shift_display_right
-#    parameters:
-#      n: int
-#    then:
-#      - lambda: |-
-#          int size = 14;
-#          if (n <= 0 || n >= size) {}else{
-#            // Shift right using memmove
-#            memmove(&id(display_bits)[n], &id(display_bits)[0], size - n);
-#
-#            // Fill the leftmost n bytes with 0
-#            for (int i = 0; i < n; i++) {
-#              id(display_bits)[i] = 0x00;
-#            }
-#          
-#          }
-#          //id(display_bits)[0] = 0x0F; //for test 
-#          // Optional: log result
-#          char buffer[64];  // make sure it's big enough for 14 bytes
-#          int offset = 0;
-#
-#          //for (int i = n; i < n+2; i++) {
-#          for (int i = 0; i < size; i++) {
-#              offset += sprintf(buffer + offset, "%02X ", id(display_bits)[i]);
-#          }
-#
-#          ESP_LOGI("display", "display_bits after shift: %s", buffer);
+          //for (int i = n; i < n+2; i++) {
+          for (int i = 0; i < size; i++) {
+              offset += sprintf(buffer + offset, "%02X ", id(display_bits)[i]);
+          }
 
+          ESP_LOGI("display", "display_bits after shift: %s", buffer);
+sensor:            
+  - platform: pulse_width
+    name: 'PM1-10 - 1-10μm ug/m3'
+    update_interval: 30s
+    id: sensor_pm
+    state_class: measurement
+    device_class: pm10
+    unit_of_measurement: 'ug/m3'
+    accuracy_decimals: 0
+    pin: 
+      number: GPIO21
+      inverted: true
+      mode:
+        input: true
+    filters:
+      - round_to_multiple_of: 0.01
+      - calibrate_linear:
+          method: exact
+          datapoints:
+            - 0.0 -> 0.0
+            - 0.05 -> 0.0
+            - 0.25 -> 1.0
+            - 1.1 -> 1.0
+      - multiply: 300 
+      - round_to_multiple_of: 1        
+binary_sensor:
+  - platform: template
+    id: btn_power
+    trigger_on_initial_state: true
+    on_click:
+      min_length: 50ms
+      max_length: 2500ms   
+      then:
+        - fan.toggle: fan_lv131
+        - lambda: |-
+            if(id(fan_lv131).state) id(swi_display).turn_on();
+  - platform: template
+    id: btn_display
+    on_click:
+       - switch.toggle: swi_display
+  - platform: template
+    id: btn_sleep
+  - platform: template
+    id: btn_auto
+  - platform: template
+    id: btn_fan
+  - platform: template
+    id: btn_timer
+# TEST code only used to identify the use leds by shifting a 1 through the full display memory!    
+  - platform: gpio
+    pin: 
+      number: GPIO04
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: test
+    on_click: 
+      - lambda: |-
+          //clear all
+          memset(id(display_bits), 0x00, 14);
 
+          // Set ONLY the first byte
+          id(display_bits)[0] = id(byte_loop);
 
+          ESP_LOGI("display", "display_bits[0] = 0x%02X", id(byte_loop));
+          id(shift_display_right)->execute(id(shift_offset));
+          id(update_display).execute();
+          // 01,02,04,08,10,20,40,80 for each byte to test leds!
+
+          // Increment 0x00 → 0xFF → wrap
+          if (id(byte_loop) >= 0x80){
+            id(byte_loop) = 0x01;
+            id(shift_offset)+=1;
+            if(id(shift_offset)>13){
+              id(shift_offset) = 0;
+            }
+            int start_byte = id(shift_offset);
+            ESP_LOGI("display", "Byte: %d ", start_byte);
+          }else{
+             id(byte_loop) =  id(byte_loop)*2;
+            //id(byte_loop)++;
+            //id(byte_loop) = 0x41;         
+          }
+globals:
+  - id: display_bits
+    type: uint8_t[14]
+    restore_value: no
+  - id: shift_offset
+    type: uint8_t
+    restore_value: no
+    initial_value: '11'
+  - id: byte_loop
+    type: uint8_t
+    restore_value: no
+    initial_value: '1'
+  - id: wifi_connecting
+    type: uint8_t
+    restore_value: no
+    initial_value: '0'
+
+switch:
+  - platform: template
+    name: "Display"
+    id: swi_display
+    optimistic: true
+
+fan:
+  - platform: template
+    name: "Fan"
+    id: fan_lv131
+    speed_count: 3
+    preset_modes:
+      - Manual
+      - Auto
+      - Sleep    
+
+interval:
+  - interval: 100ms
+    then: 
+      - script.execute: update_display
+  
 #interval:
 #  - interval: 1000ms
 #    then:
@@ -910,40 +408,3 @@ script:
 #          }
 
 
-# TEST code only used to identify the use leds by shifting a 1 through the full display memory!    
-#  - platform: gpio
-#    pin: 
-#      number: GPIO04
-#      inverted: true
-#      mode:
-#        input: true
-#        pullup: true
-#    internal: true
-#    id: test
-#    on_click: 
-#      - lambda: |-
-#          //clear all
-#          memset(id(display_bits), 0x00, 14);
-#
-#          // Set ONLY the first byte
-#          id(display_bits)[0] = id(byte_loop);
-#
-#          ESP_LOGI("display", "display_bits[0] = 0x%02X", id(byte_loop));
-#          id(shift_display_right)->execute(id(shift_offset));
-#          id(update_display).execute();
-#          // 01,02,04,08,10,20,40,80 for each byte to test leds!
-#
-#          // Increment 0x00 → 0xFF → wrap
-#          if (id(byte_loop) >= 0x80){
-#            id(byte_loop) = 0x01;
-#            id(shift_offset)+=1;
-#            if(id(shift_offset)>13){
-#              id(shift_offset) = 0;
-#            }
-#            int start_byte = id(shift_offset);
-#            ESP_LOGI("display", "Byte: %d ", start_byte);
-#          }else{
-#             id(byte_loop) =  id(byte_loop)*2;
-#            //id(byte_loop)++;
-#            //id(byte_loop) = 0x41;         
-#          }

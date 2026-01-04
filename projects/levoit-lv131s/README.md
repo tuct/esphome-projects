@@ -2,6 +2,8 @@
 
 This model is not sold anymore and often suffered from a sudden death syndrom!
 
+
+
 Some links:
 
 - https://www.reddit.com/r/AirPurifiers/comments/1idc5nu/levoit_air_purifiers_manufacturing_defect/
@@ -9,6 +11,7 @@ Some links:
 - https://www.youtube.com/watch?v=RJjbAqp-lw4
 
 Looks like some overvoltage getting to the MCU / PCB. In my case a diode was fried as well as the main MCU (ESP12F).
+![new sensor](./images/burned.jpg)
 Lukily i got a replacement unit from Levoit under warranty!
 This allowed me to reverse engineer the PCB and create an esphome based firmware.
 
@@ -40,6 +43,9 @@ The PM1003 sensor that is used originally, really sucks and i had some spare PM5
 - Improved PM Sensor PM5003 vs PM1003 (really sucks!)
 
 
+[Link to Video](https://www.youtube.com/watch?v=NGHwQ--Szvg)
+
+[![Link to Video](./images/video.png)](https://www.youtube.com/watch?v=NGHwQ--Szvg)
 
 
 ## Required 
@@ -67,6 +73,7 @@ The PM1003 sensor that is used originally, really sucks and i had some spare PM5
 
 
 My power supplies are still working, if needed get a 24V DV like a Meanwell LRS 50-24 + aa 24V to 5V bucket converter.
+![new sensor](./images/power_board.jpg)
 
 - Unplug the Switch for checking if the back is open 
 - Unplug the connection to the MCU
@@ -86,19 +93,31 @@ Soldering is a bit hard/wired, some protective film seems to be applied.
 - Remove the old MCU or cut power and gnd at least
 - Unplug the old sensor from the case
 - I used Power and GND from the old sensor and added 2 wires for the UART of the PM 5003, this allows to still use the reset BTN!
-  ![new sensor](./images/new_sensor.jpg)
+  ![new sensor](./images/new_sensor_1.jpg)
+  ![new sensor](./images/new_sensor_2.jpg)
+  ![new sensor](./images/new_sensor_3.jpg)
+  ![new sensor](./images/new_sensor_4.jpg)
   ![pm5003 pinout](./images/PMS5003-PINOUT.jpg)
 - Solder the wires for the new MCU
   ![pcb siwith wiresde](./images/board_wired2.jpg)
   D5 is not required if PM5003 is used!
 - Flash Firmware, adopt secrets.yaml with esphome, min version 2026.01
-- Connect MCU to PCB, secure with hot glue
 
 ## Assembly
 
-Just do the steps in reverse!
+- Connect MCU to PCB, secure with hot glue
+  ![new sensor](./images/pcb_hacked_mounted.jpg)
+  ![new sensor](./images/pcb_hacked_mounted_2.jpg)
+- Ensure the cable to the bottom is on the right side, and the sensor cables are at the top
+  ![new sensor](./images/assembly_0.jpg)
+- Insert the Fan carfully, it need to be fully at the top, do not pinch any cables
+  ![new sensor](./images/assembly_1.jpg)
+- Connect MCU to power board and connect power again
+  ![new sensor](./images/assembly_2.jpg)
+- Close the back lid and screw in all screws!
+  ![new sensor](./images/assembly_3.jpg)
 
-
+Done
 
 
 

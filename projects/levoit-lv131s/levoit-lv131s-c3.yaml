@@ -1,6 +1,6 @@
 #requires custom esphome version (500Khz for SPI) at the moment!
 esphome:
-  name: levoit-lv131s
+  name: !secret name
   on_boot:
     priority: 300
     then:
@@ -320,7 +320,7 @@ text_sensor:
     name: "Timer"
     id: timer_text
     icon: mdi:timer-outline
-    
+
   - platform: wifi_info
     ip_address:
       name: IP
