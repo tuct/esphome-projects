@@ -2,30 +2,11 @@
 
 This model is not sold anymore and often suffered from a sudden death syndrom!
 
-
-
-Some links:
-
-- https://www.reddit.com/r/AirPurifiers/comments/1idc5nu/levoit_air_purifiers_manufacturing_defect/
-- https://www.youtube.com/watch?v=-IfPcGs717E
-- https://www.youtube.com/watch?v=RJjbAqp-lw4
-
-Looks like some overvoltage getting to the MCU / PCB. In my case a diode was fried as well as the main MCU (ESP12F).
-![new sensor](./images/burned.jpg)
-Lukily i got a replacement unit from Levoit under warranty!
-This allowed me to reverse engineer the PCB and create an esphome based firmware.
-
-
-
-
 MCU upgraded to ESP32-C3, Sensor to PM5003.
 
-I wanted to keep the working  ESP12F but i fried it during my hack... so i replaced it with an xiao seeed esp32-c3.
+I wanted to keep my working  ESP12F but i fried it during my hack... so i replaced it with an xiao seeed esp32-c3.
 
 The PM1003 sensor that is used originally, really sucks and i had some spare PM5003 at home, so i decided to upgrade the sensor as well. Code for the original PM1003 is still here but commented out.
-
-
-
 
 
 ## Features
@@ -38,30 +19,47 @@ The PM1003 sensor that is used originally, really sucks and i had some spare PM5
     - Timer 30min to 12h
     - Sleep and Auto Mode
     - Display On/Off
-- Can play doom! (Song)
+    - Reset Filter Button (Hold for 5s until you hear a beep than release to reset the filter, also possible via HA)
+- Can play doom! (Song) (Hold Sleep for 4sec)
 - Sound On/Off and if On, only if buttons are pressed, not if remote controled!
 - Improved PM Sensor PM5003 vs PM1003 (really sucks!)
+
+![new sensor](./images/home_assistant.png))
+![new sensor](./images/home_assistant_2.png)
+
 
 
 [Link to Video](https://www.youtube.com/watch?v=NGHwQ--Szvg)
 
 [![Link to Video](./images/video.png)](https://www.youtube.com/watch?v=NGHwQ--Szvg)
 
+## Sudden Death
+Here are some links to youtube videos with some fixes:
 
-## Required 
+- https://www.reddit.com/r/AirPurifiers/comments/1idc5nu/levoit_air_purifiers_manufacturing_defect/
+- https://www.youtube.com/watch?v=-IfPcGs717E
+- https://www.youtube.com/watch?v=RJjbAqp-lw4
 
-### Parts
+
+Looks like some overvoltage getting to the MCU / PCB. In my case a diode was fried as well as the main MCU (ESP12F).
+![new sensor](./images/burned.jpg)
+Lukily i got a replacement unit from Levoit under warranty!
+This allowed me to reverse engineer the PCB and create an esphome based firmware.
+
+## The Hack 
+
+### Required Parts
 
 - Broken or working Levoit LV-PUR131S
 - Xiao seeed esp32-c3
 - PM5003 particle sensor
 - Wires and some connectors
 
-### Tools
+### Required Tools
 
 - Soldering Iron
 
-## De-Assembly
+### De-Assembly
 
 
 [Video - Start to 1:40](https://www.youtube.com/watch?v=RJjbAqp-lw4)
@@ -84,10 +82,11 @@ My power supplies are still working, if needed get a 24V DV like a Meanwell LRS 
   - First screw can easily be unscrewed
   - i used pliers for the other 2 ones, as i would need to remove the top panel and i did not find a way todo this undestrutive.
 
-## Hack / Modify PCB 
+### Hack / Modify PCB 
 
 Might be possible without removing the PCB! i did not try but it seems there is enough room!
 Soldering is a bit hard/wired, some protective film seems to be applied.
+![pcb siwith wiresde](./images/board_wired.jpg)
 
 
 - Remove the old MCU or cut power and gnd at least
@@ -103,7 +102,7 @@ Soldering is a bit hard/wired, some protective film seems to be applied.
   D5 is not required if PM5003 is used!
 - Flash Firmware, adopt secrets.yaml with esphome, min version 2026.01
 
-## Assembly
+### Assembly
 
 - Connect MCU to PCB, secure with hot glue
   ![new sensor](./images/pcb_hacked_mounted.jpg)
