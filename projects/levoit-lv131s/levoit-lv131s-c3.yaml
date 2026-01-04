@@ -219,54 +219,58 @@ sensor:
     type: PMSX003
     uart_id: uart_sensor
     pm_1_0:
-      name: "Particulate Matter <1.0µm Concentration"
+      name: "PM <1.0µm "
     pm_2_5:
-      name: "Particulate Matter <2.5µm Concentration"
+      name: "PM <2.5µm"
+      id: sensor_pm2_5
+      on_value:
+        - script.execute: update_fan_speed
     pm_10_0:
-      name: "Particulate Matter <10.0µm Concentration"      
+      name: "PM <10.0µm"      
     update_interval: 60s
-  - platform: pulse_width
-    name: 'PM10'
-    update_interval: 15s
-    id: sensor_pm
-    state_class: measurement
-    device_class: pm10
-    icon: mdi:chemical-weapon
-    unit_of_measurement: 'µg/m³'
-    accuracy_decimals: 0
-    pin: 
-      number: GPIO07 #D5
-      inverted: true
-      mode:
-        input: true
-    on_value:
-      - script.execute: update_fan_speed
-    filters:
-      - round_to_multiple_of: 0.01
-      - calibrate_linear:
-          method: exact
-          datapoints:
-            - 0.0 -> 0.0
-            - 0.01 -> 0.0
-            - 0.1 -> 140
-            - 0.15 -> 210
-            - 0.20 -> 285
-            - 0.25 -> 300
-            - 1.1 -> 300
-      - round_to_multiple_of: 1    
-      - sliding_window_moving_average:
-          window_size: 3
-          send_every: 1
+#  - platform: pulse_width
+#    name: 'PM10'
+#    update_interval: 15s
+#    id: sensor_pm
+#    state_class: measurement
+#    device_class: pm10
+#    icon: mdi:chemical-weapon
+#    unit_of_measurement: 'µg/m³'
+#    accuracy_decimals: 0
+#    pin: 
+#      number: GPIO07 #D5
+#      inverted: true
+#      mode:
+#        input: true
+#    on_value:
+#      - script.execute: update_fan_speed
+#    filters:
+#      - round_to_multiple_of: 0.01
+#      - calibrate_linear:
+#          method: exact
+#          datapoints:
+#            - 0.0 -> 0.0
+#            - 0.01 -> 0.0
+#            - 0.1 -> 140
+#            - 0.15 -> 210
+#            - 0.20 -> 285
+#            - 0.25 -> 300
+#            - 1.1 -> 300
+#      - round_to_multiple_of: 1    
+#      - sliding_window_moving_average:
+#          window_size: 3
+#          send_every: 1
   - platform: template
     name: "AQI - PM10"
     id: aqi_pm10
     device_class: aqi
     icon: mdi:air-filter
     lambda: |-
-      if (id(sensor_pm).state >= 200)  return 3.0; //red
-      if (id(sensor_pm).state >= 100)  return 2.0; //yellow
-      if (id(sensor_pm).state > 0)  return 1.0; //blue
-      if (id(sensor_pm).state == 0)  return 0.0; //green
+      if (id(sensor_pm2_5).state >= 250)  return 4.0; //red
+      if (id(sensor_pm2_5).state >= 100)  return 3.0; //yellow
+      if (id(sensor_pm2_5).state >= 50)  return 2.0; //yellow
+      if (id(sensor_pm2_5).state >= 25)  return 1.0; //blue
+      if (id(sensor_pm2_5).state == 0)  return 0.0; //green
       return 0;       
     update_interval: 5s 
     on_value:
@@ -292,6 +296,9 @@ sensor:
     entity_category: DIAGNOSTIC
     device_class: battery
     unit_of_measurement: '%'
+    filters:
+      - round_to_multiple_of: 0.01
+      - delta: 0.01
     lambda: |-
       int cfmMin = id(cfm_min_used);
       if(cfmMin==0) return 100.0;
@@ -306,12 +313,14 @@ sensor:
     id: wifi_signal_db
     update_interval: 60s
     entity_category: "diagnostic"
-
+    filters:
+      - delta: 1
 text_sensor:
   - platform: template
     name: "Timer"
     id: timer_text
     icon: mdi:timer-outline
+    
   - platform: wifi_info
     ip_address:
       name: IP
@@ -518,7 +527,7 @@ script:
             if(ps=="Sleep") speed = 0.33f;
 
             //if auto and clean air, turn off pwm, keep fan on!
-            if(ps=="Auto" && id(sensor_pm).state==0.0f) speed = 0.0f;
+            if(ps=="Auto" && id(sensor_pm2_5).state<=1.0f) speed = 0.0f;
             
           }
           ESP_LOGI("TS-setFan","speed: %.2f",speed);
@@ -548,6 +557,7 @@ script:
             if(aqi == 1.0) new_speed = 1;
             if(aqi == 2.0) new_speed = 2;
             if(aqi == 3.0) new_speed = 3;
+            if(aqi == 4.0) new_speed = 3;
             if(id(fan_lv131).speed != new_speed){
               ESP_LOGI("TS","from auto speed up!");
               id(keep_last_fan_mode) = true;
@@ -737,7 +747,7 @@ script:
               id(display_bits)[9] = id(display_bits)[9] | 0x03; 
               id(display_bits)[10] = id(display_bits)[10] | 0x06; 
             }
-            if(color == 3 ){
+            if(color >= 3 ){
               //ESP_LOGI("display", "RED");
               id(display_bits)[6] = id(display_bits)[6] | 0x49;
               id(display_bits)[7] = id(display_bits)[7] | 0x02; 
