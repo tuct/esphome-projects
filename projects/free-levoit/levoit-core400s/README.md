@@ -103,24 +103,27 @@ Payload OLD
 22 byte long (0x16) status packet payload:
 
 
-Header
-Byte 1 A5 start byte of packet
-Byte 2 22 send message or 12 ack message (52 might be error response)
-Byte 3 1-byte sequence number, increments by one each packet
-Byte 4 1-byte size of payload (after checksum byte)
-Byte 5 Always 0
-Byte 6 1-byte checksum. Computed as 255 - ( (sum all of bytes except checksum) % 256 )
-Byte 7 Always Payload Type /Version
-Byte 8 Always Payload Type /Version
-Byte 9 Always Payload Type /Version
+### Header
 
-Byte 10 MCU FW SubMinor
+- Byte 1 A5 start byte of packet
+- Byte 2 22 send message or 12 ack message (52 might be error response)
+- Byte 3 1-byte sequence number, increments by one each packet
+- Byte 4 1-byte size of payload (after checksum byte)
+- Byte 5 Always 0
+- Byte 6 1-byte checksum. Computed as 255 - ( (sum all of bytes except checksum) % 256 )
+- Byte 7 Always Payload Type /Version
+- Byte 8 Always Payload Type /Version
+- Byte 9 Always Payload Type /Version
+- Byte 10 MCU FW SubMinor
+- Byte 11 MCU FW Minor
+- Byte 12 MCU FW Major
 
-Byte 11 MCU FW Minor
 
-Byte 12 MCU FW Major
+Bytes 7-9 seems to identify the payload type? Could also be MCU version (memory mapped?)
 
-Payload New:
+
+
+### Payload New:
 
 
 Byte 13 Power:
