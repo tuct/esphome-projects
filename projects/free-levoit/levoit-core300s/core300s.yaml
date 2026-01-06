@@ -44,7 +44,7 @@ time:
 
 
 external_components:
-  - source: ../../components
+  - source: ../../../components
     components: [core300s]
 
 uart:
@@ -62,8 +62,9 @@ uart:
       after:
           timeout: 50ms
       sequence:
-        - lambda:  '' 
-#        - lambda:  UARTDebug::log_hex(direction, bytes, ':'); # show serial bytes
+#        - lambda:  '' 
+#        - lambda:  if(direction==uart::UART_DIRECTION_RX){UARTDebug::log_hex(direction, bytes, ':');} # show serial bytes
+        - lambda:  UARTDebug::log_hex(direction, bytes, ':'); # show serial bytes
 
 sensor:
   # Uptime sensor.
