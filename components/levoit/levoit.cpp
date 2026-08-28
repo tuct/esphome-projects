@@ -392,6 +392,11 @@ namespace esphome
                     this->sendCommand(setFanModeAuto);
                 break;
 
+            case NumberType::AUTO_PROFILE_ROOM_SIZE_INPUT:
+                // Just save — the MCU command fires when Room Size/Efficient
+                // is selected via the Auto Mode select, not on every edit.
+                break;
+
             case NumberType::SLEEP_MODE_MIN:
             case NumberType::SLEEP_FAN_LEVEL:
             case NumberType::QUICK_CLEAN_MIN:
@@ -458,6 +463,14 @@ namespace esphome
                         sent_auto_profile = true;
                         break;
                     case 2:
+                        // Inject the remembered room size target so the command
+                        // builder sends the right value, not the last MCU-echoed one.
+                        {
+                            auto *input = this->get_number(NumberType::AUTO_PROFILE_ROOM_SIZE_INPUT);
+                            auto *eff   = this->get_number(NumberType::EFFICIENCY_ROOM_SIZE);
+                            if (input != nullptr && eff != nullptr && input->has_state())
+                                eff->publish_state(input->state);
+                        }
                         this->sendCommand(setAutoModeEfficient);
                         sent_auto_profile = true;
                         break;

@@ -216,11 +216,14 @@ The vent angle is set as a number entity (45° = nearly closed/upward, 90° = fu
 | Feature | Type | Config Key | Description |
 |---------|----|------------|-------------|
 | Auto Mode | select | `auto_mode` | Auto mode type — options vary by model (see below) **Not for Core200S** |
-| Auto Mode Room Size | number | `efficiency_room_size` | Target room area for efficient auto mode in m² **Not for Core200S / EverestAir** |
+| Auto Mode Room Size | number | `efficiency_room_size` | MCU-reported room area for efficient auto mode in m² — reflects device status **Not for Core200S / EverestAir** |
+| Auto Mode Room Size Preset | number | `auto_profile_room_size_input` | Remembered Room Size target, automatically sent when selecting Room Size/Efficient auto profile. Persists across reboots so Default/Quiet status resets don't wipe the target. **Not for Core200S / EverestAir** |
 | Efficiency Counter | sensor | `efficiency_counter` | Seconds remaining at high fan speed in efficient auto mode **Vital only** |
 | Auto Mode High Fan Time | text_sensor | `auto_mode_room_size_high_fan` | Time still running at high speed in efficient auto mode, human readable **Vital only** |
 
 Auto Mode configures the purifier's automatic behavior and is distinct from the active fan preset/mode. On models with fan Auto support, changing Auto Mode enters the fan's Auto preset; direct fan speed changes switch the fan preset to Manual.
+
+When Room Size/Efficient is selected, the purifier uses **Auto Mode Room Size Preset** (`auto_profile_room_size_input`) as the coverage target and sends it to the MCU automatically. The **Auto Mode Room Size** number (`efficiency_room_size`) still reflects what the MCU reports back in status payloads — Default and Quiet profiles report `0`, which is normal.
 
 Auto mode options per model:
 
@@ -253,6 +256,15 @@ Auto mode options per model:
 | Error | text_sensor | `error_message` | Device error status: "Ok" or "Sensor Error" **Not for Core200S** |
 
 ### Change Log - Levoit Component
+
+#### ESP Version: 1.5.0 - unreleased
+
+* Add `auto_profile_room_size_input` number: persisted Room Size target for Room Size/Efficient auto profile (@EdenNelson)
+  * Automatically sent to the MCU when Room Size/Efficient is selected — no manual "Apply" step needed
+  * Survives Default/Quiet status resets that report room size as `0`
+  * Restores saved target on reboot, clamped to model-specific min/max
+  * Model ranges: C300S 9–50 m², C400S 9–38 m², C600S 9–147 m², V100S 9–52 m², V200S 9–87 m²
+  * Sprout: Room Size/Efficient mode is protocol-inherited from Vital but unverified on hardware — `auto_profile_room_size_input` not included for Sprout
 
 #### ESP Version: 1.4.0 - 2026.06.14
 
