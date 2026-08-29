@@ -57,6 +57,7 @@ namespace esphome
             QUICK_CLEAN_FAN_LEVEL = 15, // Vital: quick clean fan level (TLV 0x1B)
             DAYTIME_FAN_LEVEL = 16,     // Vital: daytime fan level (TLV 0x23)
             VENT_ANGLE = 17,            // EverestAir: vent louver angle 45–90° (CMD 02 12 55, status TLV 0x14)
+            AUTO_PROFILE_ROOM_SIZE_INPUT = 18, // Persisted user Room Size target for Room Size/Efficient auto profile
         };
         // Note: indices 0-11 must stay stable (serialized to preferences)
         // NumberType aliases (flat namespace)
@@ -76,6 +77,7 @@ namespace esphome
         static constexpr NumberType QUICK_CLEAN_FAN_LEVEL = NumberType::QUICK_CLEAN_FAN_LEVEL;
         static constexpr NumberType DAYTIME_FAN_LEVEL = NumberType::DAYTIME_FAN_LEVEL;
         static constexpr NumberType VENT_ANGLE = NumberType::VENT_ANGLE;
+        static constexpr NumberType AUTO_PROFILE_ROOM_SIZE_INPUT = NumberType::AUTO_PROFILE_ROOM_SIZE_INPUT;
 
         enum class SensorType : uint8_t
         {

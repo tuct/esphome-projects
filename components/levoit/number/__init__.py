@@ -41,11 +41,18 @@ TYPE_MAP = {
     "aqi_scale": NumberType.AQI_SCALE,
     # EverestAir only below
     "vent_angle": NumberType.VENT_ANGLE,
+    # Remembered Room Size target for Room Size/Efficient auto profile
+    "auto_profile_room_size_input": NumberType.AUTO_PROFILE_ROOM_SIZE_INPUT,
 }
 
 # (min_value, max_value, step, extra_props)
 TYPE_RANGE = {
     "efficiency_room_size": (9.0, 296.0, 1.0, {
+        CONF_DEVICE_CLASS: "area",
+        CONF_UNIT_OF_MEASUREMENT: "m²",
+        CONF_ENTITY_CATEGORY: ENTITY_CATEGORY_CONFIG,
+    }),
+    "auto_profile_room_size_input": (9.0, 296.0, 1.0, {
         CONF_DEVICE_CLASS: "area",
         CONF_UNIT_OF_MEASUREMENT: "m²",
         CONF_ENTITY_CATEGORY: ENTITY_CATEGORY_CONFIG,

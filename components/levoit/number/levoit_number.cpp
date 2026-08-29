@@ -2,6 +2,7 @@
 #include "../levoit.h"
 #include "esphome/core/log.h"
 #include "esphome/components/number/number_traits.h"
+#include <algorithm>
 
 namespace esphome
 {
@@ -17,6 +18,25 @@ namespace esphome
       switch (this->type_) {
         case NumberType::EFFICIENCY_ROOM_SIZE:
           this->traits.set_mode(number::NumberMode::NUMBER_MODE_SLIDER);
+          break;
+
+        case NumberType::AUTO_PROFILE_ROOM_SIZE_INPUT:
+          this->traits.set_mode(number::NumberMode::NUMBER_MODE_BOX);
+
+          pref_ = global_preferences->make_preference<float>(fnv1_hash("levoit_room_size_input"));
+          {
+            float saved;
+            if (pref_.load(&saved)) {
+              float clamped = std::max(this->traits.get_min_value(),
+                                       std::min(this->traits.get_max_value(), saved));
+              ESP_LOGI(TAG, "Restored auto profile room size input: %.0f m²", clamped);
+              this->publish_state(clamped);
+            } else {
+              ESP_LOGI(TAG, "No saved room size input, defaulting to %.0f m²",
+                       this->traits.get_min_value());
+              this->publish_state(this->traits.get_min_value());
+            }
+          }
           break;
 
         case NumberType::TIMER:
@@ -56,10 +76,14 @@ namespace esphome
       // Optimistic update for HA UI
       this->publish_state(state);
       
-      // Save to preferences if filter_lifetime_months
+      // Save to preferences if filter_lifetime_months or auto_profile_room_size_input
       if (this->type_ == NumberType::FILTER_LIFETIME_MONTHS) {
         pref_.save(&value);
         ESP_LOGD(TAG, "Saved filter lifetime: %.0f months", value);
+      }
+      if (this->type_ == NumberType::AUTO_PROFILE_ROOM_SIZE_INPUT) {
+        pref_.save(&value);
+        ESP_LOGD(TAG, "Saved auto profile room size input: %.0f m²", value);
       }
       
       if (!parent_)
